@@ -1,0 +1,1930 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智能周计划 · 云端版</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --blue: #3b82f6;
+    --dark: #0f172a;
+    --gray: #64748b;
+    --border: #e2e8f0;
+    --bg: #f1f5f9;
+  }
+  body {
+    font-family: system-ui, -apple-system, 'Segoe UI', 'Microsoft YaHei', sans-serif;
+    background: var(--bg);
+    min-height: 100vh;
+    padding: 1rem;
+    color: #1e293b;
+    overflow: hidden;
+  }
+  .app {
+    max-width: 1500px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    gap: 1rem;
+    height: calc(100vh - 2rem);
+  }
+  @media (max-width: 1000px) {
+    body { overflow: auto; padding: 0.5rem; }
+    .app { grid-template-columns: 1fr; height: auto; }
+  }
+
+  /* 登录页 */
+  .auth-page {
+    position: fixed;
+    inset: 0;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 1rem;
+  }
+  .auth-card {
+    background: white;
+    border-radius: 1.5rem;
+    padding: 2rem;
+    width: 100%;
+    max-width: 380px;
+    box-shadow: 0 25px 50px -12px rgba(0,0,0,0.3);
+  }
+  .auth-card h1 {
+    font-size: 1.5rem;
+    color: var(--dark);
+    margin-bottom: 0.5rem;
+    text-align: center;
+  }
+  .auth-card .sub {
+    text-align: center;
+    color: var(--gray);
+    font-size: 0.85rem;
+    margin-bottom: 1.5rem;
+  }
+  .auth-card .field {
+    margin-bottom: 1rem;
+  }
+  .auth-card .field label {
+    display: block;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--dark);
+    margin-bottom: 0.3rem;
+  }
+  .auth-card .input {
+    width: 100%;
+    padding: 0.7rem 1rem;
+    border: 1.5px solid var(--border);
+    border-radius: 0.8rem;
+    font-size: 0.9rem;
+    font-family: inherit;
+    transition: 0.15s;
+  }
+  .auth-card .input:focus {
+    outline: none;
+    border-color: var(--blue);
+    box-shadow: 0 0 0 3px rgba(59,130,246,0.12);
+  }
+  .auth-card .btn {
+    width: 100%;
+    padding: 0.8rem;
+    border: none;
+    border-radius: 0.8rem;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: 0.15s;
+    font-family: inherit;
+  }
+  .auth-card .btn-primary {
+    background: var(--blue);
+    color: white;
+  }
+  .auth-card .btn-primary:hover { background: #2563eb; }
+  .auth-card .btn-primary:disabled {
+    background: #93c5fd;
+    cursor: not-allowed;
+  }
+  .auth-card .toggle {
+    text-align: center;
+    margin-top: 1rem;
+    font-size: 0.85rem;
+    color: var(--gray);
+  }
+  .auth-card .toggle a {
+    color: var(--blue);
+    cursor: pointer;
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .auth-card .toggle a:hover { text-decoration: underline; }
+  .auth-msg {
+    padding: 0.7rem 1rem;
+    border-radius: 0.7rem;
+    font-size: 0.82rem;
+    margin-bottom: 1rem;
+    display: none;
+  }
+  .auth-msg.show { display: block; }
+  .auth-msg.error { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+  .auth-msg.success { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
+
+  .sidebar {
+    background: white;
+    border-radius: 1.5rem;
+    padding: 1.2rem;
+    box-shadow: 0 10px 30px -10px rgba(0,0,0,0.08);
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    overflow-y: auto;
+    max-height: calc(100vh - 2rem);
+  }
+  .sidebar h1 {
+    font-size: 1.2rem;
+    color: var(--dark);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .user-badge {
+    font-size: 0.75rem;
+    background: linear-gradient(135deg,#dbeafe,#bfdbfe);
+    color: #1e40af;
+    padding: 0.4rem 0.7rem;
+    border-radius: 0.8rem;
+    font-weight: 600;
+    border: 1px solid #93c5fd;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .user-badge .email {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 180px;
+  }
+  .user-badge .logout {
+    background: none;
+    border: none;
+    color: #dc2626;
+    cursor: pointer;
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 0.2rem 0.4rem;
+    border-radius: 0.4rem;
+  }
+  .user-badge .logout:hover { background: #fef2f2; }
+
+  .sync-status {
+    font-size: 0.7rem;
+    padding: 0.3rem 0.6rem;
+    border-radius: 0.6rem;
+    text-align: center;
+    transition: 0.2s;
+  }
+  .sync-status.synced { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
+  .sync-status.syncing { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+  .sync-status.error { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+
+  .section-title {
+    font-size: 0.75rem; font-weight: 700; color: var(--gray);
+    text-transform: uppercase; letter-spacing: 0.5px;
+    margin-bottom: 0.4rem; display: flex; justify-content: space-between;
+    align-items: center;
+  }
+
+  .btn {
+    border: none; border-radius: 0.8rem; padding: 0.55rem 1rem;
+    font-weight: 500; font-size: 0.82rem; cursor: pointer;
+    transition: 0.15s; font-family: inherit;
+    display: inline-flex; align-items: center; justify-content: center;
+    gap: 0.3rem;
+  }
+  .btn-primary { background: var(--blue); color: white; }
+  .btn-primary:hover { background: #2563eb; }
+  .btn-dark { background: var(--dark); color: white; }
+  .btn-dark:hover { background: #1e293b; }
+  .btn-outline { background: white; color: var(--dark); border: 1.5px solid var(--border); }
+  .btn-outline:hover { background: #f8fafc; }
+  .btn-danger { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+  .btn-danger:hover { background: #fee2e2; }
+  .btn-sm { padding: 0.35rem 0.7rem; font-size: 0.75rem; border-radius: 0.6rem; }
+  .btn-block { width: 100%; }
+
+  .input, .select {
+    width: 100%; padding: 0.5rem 0.7rem; border: 1.5px solid var(--border);
+    border-radius: 0.7rem; font-size: 0.82rem; font-family: inherit;
+    background: #fafbff; transition: 0.15s;
+  }
+  .input:focus, .select:focus {
+    outline: none; border-color: var(--blue); background: white;
+    box-shadow: 0 0 0 3px rgba(59,130,246,0.12);
+  }
+  .input-row { display: flex; gap: 0.4rem; align-items: center; }
+  .input-row .input { flex: 1; }
+  .input-row .short { flex: 0 0 70px; }
+
+  .task-list, .course-list {
+    display: flex; flex-direction: column; gap: 0.35rem;
+    max-height: 180px; overflow-y: auto;
+  }
+  .task-item {
+    display: flex; align-items: center; gap: 0.4rem;
+    padding: 0.45rem 0.6rem; background: #f8fafc;
+    border-radius: 0.6rem; font-size: 0.8rem;
+    border: 1px solid #f1f5f9;
+    border-left: 4px solid var(--blue);
+  }
+  .task-item.p-high { border-left-color: #ef4444; }
+  .task-item.p-medium { border-left-color: #f59e0b; }
+  .task-item.p-low { border-left-color: #10b981; }
+  .task-item .name { font-weight: 500; color: var(--dark); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .task-item .meta { font-size: 0.68rem; color: var(--gray); display: flex; flex-direction: column; align-items: flex-end; gap: 0.1rem; }
+  .task-item .dl-overdue { color: #dc2626; font-weight: 600; }
+  .task-item .del, .course-item .del {
+    background: none; border: none; cursor: pointer; color: #94a3b8;
+    font-size: 0.9rem; padding: 0 0.15rem;
+  }
+  .task-item .del:hover, .course-item .del:hover { color: #dc2626; }
+
+  .course-item {
+    display: flex; align-items: center; gap: 0.4rem;
+    padding: 0.4rem 0.6rem; border-radius: 0.6rem; font-size: 0.78rem;
+    border-left: 4px solid;
+  }
+  .course-item .info { display: flex; flex-direction: column; flex: 1; }
+  .course-item .cname { font-weight: 600; }
+  .course-item .ctime { font-size: 0.68rem; color: var(--gray); }
+
+  .legend {
+    font-size: 0.7rem; color: var(--gray); line-height: 1.6;
+  }
+  .legend-row { display: flex; align-items: center; gap: 0.4rem; }
+  .legend-swatch {
+    width: 14px; height: 14px; border-radius: 4px; flex-shrink: 0;
+  }
+
+  .textarea {
+    width: 100%; min-height: 70px; padding: 0.5rem 0.7rem;
+    border: 1.5px solid var(--border); border-radius: 0.7rem;
+    font-size: 0.75rem; font-family: 'SF Mono', Consolas, monospace;
+    background: #fafbff; resize: vertical;
+  }
+  .textarea:focus {
+    outline: none; border-color: var(--blue); background: white;
+    box-shadow: 0 0 0 3px rgba(59,130,246,0.12);
+  }
+
+  .main {
+    background: white;
+    border-radius: 1.5rem;
+    box-shadow: 0 10px 30px -10px rgba(0,0,0,0.08);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    max-height: calc(100vh - 2rem);
+  }
+  .calendar-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 1rem 1.5rem; border-bottom: 1px solid var(--border);
+    flex-wrap: wrap; gap: 0.6rem;
+  }
+  .calendar-header .title { font-size: 1.1rem; font-weight: 700; color: var(--dark); }
+  .nav-group { display: flex; gap: 0.4rem; align-items: center; }
+  .hint {
+    font-size: 0.72rem; color: #7c3aed; background: #f5f3ff;
+    padding: 0.3rem 0.7rem; border-radius: 1rem; border: 1px solid #ddd6fe;
+  }
+
+  .calendar-body { flex: 1; overflow: auto; position: relative; }
+
+  .week-view { display: grid; grid-template-columns: 60px repeat(7, 1fr); min-width: 800px; }
+  .time-col-header { background: #f8fafc; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 5; }
+  .day-header {
+    text-align: center; padding: 0.6rem 0.3rem; background: #f8fafc;
+    border-right: 1px solid var(--border); border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 5; cursor: pointer;
+    transition: 0.15s;
+  }
+  .day-header:hover { background: #eff6ff; }
+  .day-header.today { background: linear-gradient(180deg,#dbeafe,#eff6ff); }
+  .day-header .dow { font-size: 0.7rem; color: var(--gray); font-weight: 500; }
+  .day-header .date { font-size: 1.1rem; font-weight: 700; color: var(--dark); }
+  .day-header.today .date { color: #1e40af; }
+
+  .time-axis { background: #f8fafc; border-right: 1px solid var(--border); position: relative; }
+  .time-label {
+    position: absolute; right: 6px; font-size: 0.68rem; color: var(--gray);
+    transform: translateY(-50%); font-weight: 500;
+  }
+  .time-label.hour-line { color: #94a3b8; }
+  .time-label.noon-line { color: #d97706; font-weight: 700; }
+
+  .day-column {
+    position: relative; border-right: 1px solid var(--border);
+    background: white;
+  }
+  .day-column.today-col { background: #fafbff; }
+  .hour-cell {
+    position: absolute; left: 0; right: 0; border-top: 1px dashed #e2e8f0;
+    pointer-events: none;
+  }
+  .hour-cell.major { border-top: 1px solid #cbd5e1; }
+
+  .event-block {
+    position: absolute; left: 2px; right: 2px;
+    border-radius: 6px; padding: 3px 6px;
+    font-size: 0.7rem; overflow: hidden; cursor: pointer;
+    border-left: 3px solid; user-select: none;
+    transition: box-shadow 0.15s, transform 0.1s;
+    z-index: 2;
+    line-height: 1.25;
+  }
+  .event-block:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 3; }
+  .event-block .ev-name { font-weight: 600; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .event-block .ev-time { font-size: 0.62rem; opacity: 0.8; display: block; }
+  .event-block.done { opacity: 0.5; text-decoration: line-through; }
+  .event-block.course { opacity: 0.95; }
+
+  .drag-ghost {
+    position: absolute; left: 2px; right: 2px;
+    background: rgba(139,92,246,0.25); border: 2px dashed #8b5cf6;
+    border-radius: 6px; pointer-events: none; z-index: 10;
+    display: flex; align-items: flex-start; justify-content: flex-end;
+    padding: 3px 6px; font-size: 0.68rem; color: #6d28d9; font-weight: 600;
+  }
+
+  .now-line {
+    position: absolute; left: 0; right: 0; height: 2px;
+    background: #ef4444; z-index: 8; pointer-events: none;
+  }
+  .now-line::before {
+    content: ''; position: absolute; left: -3px; top: -4px;
+    width: 10px; height: 10px; border-radius: 50%; background: #ef4444;
+  }
+
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(15,23,42,0.5);
+    display: none; align-items: center; justify-content: center;
+    z-index: 100; padding: 1rem;
+  }
+  .modal-overlay.show { display: flex; }
+  .modal {
+    background: white; border-radius: 1.5rem; padding: 1.5rem;
+    max-width: 420px; width: 100%; max-height: 90vh; overflow-y: auto;
+    box-shadow: 0 25px 50px -12px rgba(0,0,0,0.3);
+  }
+  .modal h3 {
+    font-size: 1.05rem; color: var(--dark); margin-bottom: 1rem;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .modal .close {
+    background: none; border: none; font-size: 1.3rem; cursor: pointer;
+    color: #94a3b8;
+  }
+  .modal .field { margin-bottom: 0.7rem; }
+  .modal .field label {
+    display: block; font-size: 0.75rem; font-weight: 600;
+    color: var(--dark); margin-bottom: 0.25rem;
+  }
+  .modal-actions {
+    display: flex; gap: 0.5rem; margin-top: 1rem; justify-content: flex-end;
+  }
+
+  .color-picker { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+  .color-swatch {
+    width: 28px; height: 28px; border-radius: 50%;
+    cursor: pointer; border: 2px solid transparent;
+    transition: 0.15s;
+  }
+  .color-swatch:hover { transform: scale(1.1); }
+  .color-swatch.selected { border-color: var(--dark); transform: scale(1.1); }
+
+  .toast {
+    position: fixed; bottom: 1.5rem; left: 50%;
+    transform: translateX(-50%) translateY(100px);
+    background: var(--dark); color: white; padding: 0.7rem 1.3rem;
+    border-radius: 1rem; font-size: 0.82rem; z-index: 200;
+    transition: transform 0.3s; box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    max-width: 90%; text-align: center;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+
+  .loading-overlay {
+    position: fixed; inset: 0; background: rgba(255,255,255,0.9);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 500; flex-direction: column; gap: 1rem;
+  }
+  .loading-spinner {
+    width: 40px; height: 40px;
+    border: 4px solid #e2e8f0;
+    border-top-color: #3b82f6;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+  @media (max-width: 1000px) {
+    .sidebar { max-height: none; }
+    .main { max-height: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="auth-page" id="authPage">
+  <div class="auth-card">
+    <h1>📅 智能周计划</h1>
+    <div class="sub" id="authSub">登录你的账号</div>
+    <div class="auth-msg" id="authMsg"></div>
+    <div class="field">
+      <label>邮箱</label>
+      <input class="input" id="authEmail" type="email" placeholder="your@email.com" autocomplete="email">
+    </div>
+    <div class="field">
+      <label>密码</label>
+      <input class="input" id="authPassword" type="password" placeholder="至少 6 位" autocomplete="current-password">
+    </div>
+    <button class="btn btn-primary" id="authBtn">登录</button>
+    <div class="toggle">
+      <span id="authToggleText">还没有账号？</span>
+      <a id="authToggleBtn">注册</a>
+    </div>
+  </div>
+</div>
+
+<div class="loading-overlay" id="loadingOverlay" style="display:none;">
+  <div class="loading-spinner"></div>
+  <div style="color:#64748b; font-size:0.9rem;" id="loadingText">加载数据中…</div>
+</div>
+
+<div class="app" id="mainApp" style="display:none;">
+  <div class="sidebar">
+    <div>
+      <h1>📅 智能周计划</h1>
+      <div class="user-badge" style="margin-top:0.5rem;">
+        <span class="email" id="userEmail">--</span>
+        <button class="logout" id="logoutBtn">退出</button>
+      </div>
+      <div class="sync-status synced" id="syncStatus" style="margin-top:0.5rem;">✅ 已同步</div>
+    </div>
+
+    <div>
+      <div class="section-title">
+        <span>📋 任务池</span>
+        <span style="font-size:0.7rem; color:#94a3b8;" id="taskCount">0</span>
+      </div>
+      <input class="input" id="taskNameInput" placeholder="任务名称" maxlength="30" style="margin-bottom:0.3rem;">
+      <div class="input-row" style="margin-bottom:0.3rem;">
+        <input class="input short" id="taskDurInput" type="number" placeholder="分钟" min="5" step="5">
+        <select class="input" id="taskPriorityInput" title="优先级">
+          <option value="medium">🟡 中优先</option>
+          <option value="high">🔴 高优先</option>
+          <option value="low">🟢 低优先</option>
+        </select>
+      </div>
+      <div class="input-row" style="margin-bottom:0.4rem;">
+        <input class="input" id="taskDeadlineInput" type="datetime-local" title="Deadline（可选）">
+      </div>
+      <button class="btn btn-primary btn-block btn-sm" id="addTaskBtn">➕ 添加到任务池</button>
+      <div class="task-list" id="taskList" style="margin-top:0.5rem;"></div>
+    </div>
+
+    <div>
+      <div class="section-title">
+        <span>🚫 不可用时间</span>
+        <span style="font-size:0.7rem; color:#94a3b8;" id="courseCount">0</span>
+      </div>
+      <div style="font-size:0.72rem; color:#7c3aed; background:#f5f3ff; padding:0.5rem 0.6rem; border-radius:0.6rem; margin-bottom:0.5rem; line-height:1.4;">
+        💡 在日历空白处 <b>按住拖拽</b> 即可创建课程/占用时间<br>
+        🔴 突发事件会挤占并顺延后续任务
+      </div>
+      <div class="course-list" id="courseList"></div>
+    </div>
+
+    <div>
+      <div class="section-title">📥 批量导入课程</div>
+      <div class="textarea" id="bulkInput" placeholder="每行一门：课程名, 周几(1-7), 开始, 结束
+示例：
+高等数学, 1, 08:00, 09:40
+英语, 3, 10:00, 11:40"></div>
+      <button class="btn btn-outline btn-block btn-sm" id="bulkImportBtn" style="margin-top:0.4rem;">📥 导入</button>
+    </div>
+
+    <div>
+      <div class="section-title">⚙️ 设置</div>
+      <div class="input-row" style="margin-bottom:0.4rem; align-items:center;">
+        <span style="font-size:0.75rem; color:var(--gray); white-space:nowrap;">作息</span>
+        <input class="input" id="dayStartInput" type="time" value="07:00">
+        <span style="font-size:0.75rem; color:var(--gray);">—</span>
+        <input class="input" id="dayEndInput" type="time" value="23:00">
+      </div>
+      <div class="input-row" style="margin-bottom:0.4rem; align-items:center;">
+        <span style="font-size:0.75rem; color:var(--gray); white-space:nowrap;">午餐</span>
+        <input class="input" id="mealStartInput" type="time" value="12:00">
+        <span style="font-size:0.75rem; color:var(--gray);">—</span>
+        <input class="input" id="mealEndInput" type="time" value="13:00">
+      </div>
+      <div class="input-row" style="margin-bottom:0.4rem; align-items:center;">
+        <span style="font-size:0.75rem; color:var(--gray); white-space:nowrap;">晚餐</span>
+        <input class="input" id="dinnerStartInput" type="time" value="18:00">
+        <span style="font-size:0.75rem; color:var(--gray);">—</span>
+        <input class="input" id="dinnerEndInput" type="time" value="19:00">
+      </div>
+      <div class="input-row" style="margin-bottom:0.4rem; align-items:center;">
+        <span style="font-size:0.75rem; color:var(--gray); white-space:nowrap;">任务间隔</span>
+        <input class="input short" id="taskGapInput" type="number" value="10" min="0" max="60" step="5">
+        <span style="font-size:0.75rem; color:var(--gray);">分钟</span>
+      </div>
+      <div class="input-row" style="margin-bottom:0.4rem; align-items:center;">
+        <span style="font-size:0.75rem; color:var(--gray); white-space:nowrap;">最短段</span>
+        <input class="input short" id="minSlotInput" type="number" value="15" min="5" step="5">
+        <span style="font-size:0.75rem; color:var(--gray);">分钟</span>
+      </div>
+      <button class="btn btn-dark btn-block btn-sm" id="autoScheduleBtn">✨ 智能排程（未来14天）</button>
+      <button class="btn btn-danger btn-block btn-sm" id="clearAllBtn" style="margin-top:0.3rem;">🗑️ 清空所有数据</button>
+    </div>
+
+    <div class="legend">
+      <div class="legend-row"><span class="legend-swatch" style="background:#fef3c7;border-left:3px solid #f59e0b;"></span> 用餐时间（自动预留）</div>
+      <div class="legend-row"><span class="legend-swatch" style="background:#eff6ff;border-left:3px solid #3b82f6;"></span> 任务</div>
+      <div class="legend-row"><span class="legend-swatch" style="background:#f5f3ff;border-left:3px solid #8b5cf6;"></span> 课程/占用</div>
+      <div class="legend-row"><span class="legend-swatch" style="background:#fee2e2;border-left:3px solid #ef4444;box-shadow:0 0 0 2px #ef4444 inset;"></span> 突发事件（优先）</div>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="calendar-header">
+      <div class="title" id="calendarTitle">加载中…</div>
+      <span class="hint">🖱️ 空白处拖拽创建 · 点击编辑</span>
+      <div class="nav-group">
+        <button class="btn btn-outline btn-sm" id="prevBtn">←</button>
+        <button class="btn btn-outline btn-sm" id="todayBtn">今天</button>
+        <button class="btn btn-outline btn-sm" id="nextBtn">→</button>
+      </div>
+    </div>
+    <div class="calendar-body" id="calendarBody"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal" id="modalContent"></div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+// ============================================================
+// ✅ 已填入你的 Supabase 配置
+// ============================================================
+const SUPABASE_URL = 'https://vjobutrvjbijlwynpzut.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZqb2J1dHJ2amJpamx3eW5wenV0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwNDA5ODUsImV4cCI6MjEwNDYxNjk4NX0.cSsm6DPqagd3-ieq1Qwb8K7UATMtGDEYji98wAl7mks';
+// ============================================================
+
+(function() {
+  const { createClient } = supabase;
+  const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  const DOW_NAMES = ['周日','周一','周二','周三','周四','周五','周六'];
+  const HOUR_HEIGHT = 48;
+
+  const COLOR_POOL = [
+    { bg: '#dbeafe', border: '#3b82f6', text: '#1e40af' },
+    { bg: '#dcfce7', border: '#22c55e', text: '#166534' },
+    { bg: '#fef3c7', border: '#f59e0b', text: '#92400e' },
+    { bg: '#fce7f3', border: '#ec4899', text: '#9d174d' },
+    { bg: '#e0e7ff', border: '#6366f1', text: '#3730a3' },
+    { bg: '#ccfbf1', border: '#14b8a6', text: '#115e59' },
+    { bg: '#fee2e2', border: '#ef4444', text: '#991b1b' },
+    { bg: '#f3e8ff', border: '#a855f7', text: '#6b21a8' },
+    { bg: '#ffedd5', border: '#f97316', text: '#9a3412' },
+    { bg: '#e2e8f0', border: '#64748b', text: '#334155' }
+  ];
+
+  const URGENT_COLOR = { bg: '#fee2e2', border: '#ef4444', text: '#991b1b' };
+
+  let tasks = [];
+  let courses = [];
+  let events = [];
+  let settings = {
+    day_start: '07:00',
+    day_end: '23:00',
+    meal_start: '12:00',
+    meal_end: '13:00',
+    dinner_start: '18:00',
+    dinner_end: '19:00',
+    min_slot: 15,
+    task_gap: 10
+  };
+  let viewDate = new Date();
+  let currentUser = null;
+  let realtimeChannel = null;
+  let isAuthMode = false;
+
+  const $ = id => document.getElementById(id);
+  const authPage = $('authPage');
+  const mainApp = $('mainApp');
+  const loadingOverlay = $('loadingOverlay');
+  const taskList = $('taskList');
+  const courseList = $('courseList');
+  const calendarBody = $('calendarBody');
+  const calendarTitle = $('calendarTitle');
+  const modalOverlay = $('modalOverlay');
+  const modalContent = $('modalContent');
+  const toast = $('toast');
+  const syncStatus = $('syncStatus');
+
+  function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+  function pad(n) { return String(n).padStart(2,'0'); }
+  function toMin(t) { if (!t) return 0; const [h,m] = t.split(':').map(Number); return h*60+m; }
+  function toTime(min) { min = ((min % 1440) + 1440) % 1440; return `${pad(Math.floor(min/60))}:${pad(min%60)}`; }
+  function fmtDur(min) {
+    if (min < 60) return min + '分钟';
+    const h = Math.floor(min/60), m = min%60;
+    return m === 0 ? h+'小时' : h+'小时'+m+'分';
+  }
+  function dateKey(d) { return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
+  function parseDate(s) { const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d); }
+  function addDays(d, n) { const r = new Date(d); r.setDate(r.getDate()+n); return r; }
+  function escapeHtml(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+  function nextColor() {
+    const c = COLOR_POOL[Math.floor(Math.random() * COLOR_POOL.length)];
+    return { ...c };
+  }
+
+  function showToast(msg) {
+    toast.textContent = msg;
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 2400);
+  }
+
+  function setSyncStatus(status, text) {
+    syncStatus.className = 'sync-status ' + status;
+    syncStatus.textContent = text;
+  }
+
+  function showLoading(text) {
+    $('loadingText').textContent = text || '加载中…';
+    loadingOverlay.style.display = 'flex';
+  }
+  function hideLoading() {
+    loadingOverlay.style.display = 'none';
+  }
+
+  // ==================== 认证 ====================
+  function showAuthError(msg) {
+    const el = $('authMsg');
+    el.className = 'auth-msg error show';
+    el.textContent = msg;
+  }
+  function showAuthSuccess(msg) {
+    const el = $('authMsg');
+    el.className = 'auth-msg success show';
+    el.textContent = msg;
+  }
+  function clearAuthMsg() {
+    $('authMsg').className = 'auth-msg';
+  }
+
+  function toggleAuthMode() {
+    isAuthMode = !isAuthMode;
+    $('authSub').textContent = isAuthMode ? '创建一个新账号' : '登录你的账号';
+    $('authBtn').textContent = isAuthMode ? '注册' : '登录';
+    $('authToggleText').textContent = isAuthMode ? '已有账号？' : '还没有账号？';
+    $('authToggleBtn').textContent = isAuthMode ? '去登录' : '注册';
+    clearAuthMsg();
+  }
+
+  async function handleAuth() {
+    const email = $('authEmail').value.trim();
+    const password = $('authPassword').value;
+    if (!email) { showAuthError('请输入邮箱'); return; }
+    if (!password || password.length < 6) { showAuthError('密码至少 6 位'); return; }
+
+    $('authBtn').disabled = true;
+    clearAuthMsg();
+
+    try {
+      if (isAuthMode) {
+        const { data, error } = await sb.auth.signUp({ email, password });
+        if (error) throw error;
+        if (data.user && !data.session) {
+          showAuthSuccess('注册成功！请查收邮件确认，或直接登录（如果关闭了邮箱验证）。');
+          $('authBtn').disabled = false;
+          return;
+        }
+        showAuthSuccess('注册成功，正在进入…');
+      } else {
+        const { data, error } = await sb.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+        showAuthSuccess('登录成功，正在加载…');
+      }
+    } catch (err) {
+      showAuthError(err.message || '操作失败，请重试');
+      $('authBtn').disabled = false;
+    }
+  }
+
+  async function handleLogout() {
+    if (!confirm('确定退出登录吗？')) return;
+    if (realtimeChannel) {
+      await sb.removeChannel(realtimeChannel);
+      realtimeChannel = null;
+    }
+    await sb.auth.signOut();
+  }
+
+  // ==================== 数据加载 ====================
+  async function loadAllData() {
+    showLoading('加载数据中…');
+    try {
+      const uid = currentUser.id;
+
+      const [tasksRes, coursesRes, eventsRes, settingsRes] = await Promise.all([
+        sb.from('tasks').select('*').order('created_at'),
+        sb.from('courses').select('*').order('day_of_week'),
+        sb.from('events').select('*').order('date'),
+        sb.from('settings').select('*').eq('user_id', uid).maybeSingle()
+      ]);
+
+      if (tasksRes.error) throw tasksRes.error;
+      if (coursesRes.error) throw coursesRes.error;
+      if (eventsRes.error) throw eventsRes.error;
+
+      tasks = (tasksRes.data || []).map(t => ({
+        id: t.id,
+        name: t.name,
+        duration: t.duration,
+        priority: t.priority || 'medium',
+        deadline: t.deadline
+      }));
+
+      courses = (coursesRes.data || []).map(c => ({
+        id: c.id,
+        name: c.name,
+        dayOfWeek: c.day_of_week,
+        start: c.start_time?.slice(0,5) || c.start_time,
+        end: c.end_time?.slice(0,5) || c.end_time,
+        color: c.color
+      }));
+
+      events = (eventsRes.data || []).map(e => ({
+        id: e.id,
+        name: e.name,
+        date: e.date,
+        start: e.start_time?.slice(0,5) || e.start_time,
+        end: e.end_time?.slice(0,5) || e.end_time,
+        type: 'event',
+        urgent: e.urgent || false,
+        done: e.done || false,
+        priority: e.priority || 'medium',
+        color: e.color,
+        duration: toMin(e.end_time) - toMin(e.start_time)
+      }));
+
+      if (settingsRes.data) {
+        settings = {
+          day_start: settingsRes.data.day_start?.slice(0,5) || '07:00',
+          day_end: settingsRes.data.day_end?.slice(0,5) || '23:00',
+          meal_start: settingsRes.data.meal_start?.slice(0,5) || '12:00',
+          meal_end: settingsRes.data.meal_end?.slice(0,5) || '13:00',
+          dinner_start: settingsRes.data.dinner_start?.slice(0,5) || '18:00',
+          dinner_end: settingsRes.data.dinner_end?.slice(0,5) || '19:00',
+          min_slot: settingsRes.data.min_slot || 15,
+          task_gap: settingsRes.data.task_gap || 10
+        };
+      }
+
+      applySettingsToUI();
+      renderTasks();
+      renderCourses();
+      renderCalendar();
+      setSyncStatus('synced', '✅ 已同步');
+    } catch (err) {
+      console.error('加载数据失败:', err);
+      showToast('加载数据失败：' + (err.message || '未知错误'));
+      setSyncStatus('error', '❌ 同步失败');
+    } finally {
+      hideLoading();
+    }
+  }
+
+  function applySettingsToUI() {
+    $('dayStartInput').value = settings.day_start;
+    $('dayEndInput').value = settings.day_end;
+    $('mealStartInput').value = settings.meal_start;
+    $('mealEndInput').value = settings.meal_end;
+    $('dinnerStartInput').value = settings.dinner_start;
+    $('dinnerEndInput').value = settings.dinner_end;
+    $('minSlotInput').value = settings.min_slot;
+    $('taskGapInput').value = settings.task_gap;
+  }
+
+  // ==================== 云端同步 ====================
+  async function syncTaskToCloud(task, action = 'upsert') {
+    if (!currentUser) return;
+    if (action === 'delete') {
+      await sb.from('tasks').delete().eq('id', task.id);
+    } else {
+      await sb.from('tasks').upsert({
+        id: task.id,
+        user_id: currentUser.id,
+        name: task.name,
+        duration: task.duration,
+        priority: task.priority || 'medium',
+        deadline: task.deadline || null
+      });
+    }
+  }
+
+  async function syncCourseToCloud(course, action = 'upsert') {
+    if (!currentUser) return;
+    if (action === 'delete') {
+      await sb.from('courses').delete().eq('id', course.id);
+    } else {
+      await sb.from('courses').upsert({
+        id: course.id,
+        user_id: currentUser.id,
+        name: course.name,
+        day_of_week: course.dayOfWeek,
+        start_time: course.start + ':00',
+        end_time: course.end + ':00',
+        color: course.color
+      });
+    }
+  }
+
+  async function syncEventToCloud(event, action = 'upsert') {
+    if (!currentUser) return;
+    if (action === 'delete') {
+      await sb.from('events').delete().eq('id', event.id);
+    } else {
+      await sb.from('events').upsert({
+        id: event.id,
+        user_id: currentUser.id,
+        name: event.name,
+        date: event.date,
+        start_time: event.start + ':00',
+        end_time: event.end + ':00',
+        urgent: event.urgent || false,
+        done: event.done || false,
+        priority: event.priority || 'medium',
+        color: event.color
+      });
+    }
+  }
+
+  async function syncSettingsToCloud() {
+    if (!currentUser) return;
+    await sb.from('settings').upsert({
+      user_id: currentUser.id,
+      day_start: settings.day_start + ':00',
+      day_end: settings.day_end + ':00',
+      meal_start: settings.meal_start + ':00',
+      meal_end: settings.meal_end + ':00',
+      dinner_start: settings.dinner_start + ':00',
+      dinner_end: settings.dinner_end + ':00',
+      min_slot: settings.min_slot,
+      task_gap: settings.task_gap
+    });
+  }
+
+  // ==================== 实时订阅 ====================
+  function setupRealtime() {
+    if (realtimeChannel) return;
+    realtimeChannel = sb.channel('db-changes')
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'tasks', filter: `user_id=eq.${currentUser.id}` },
+        () => handleRealtimeChange())
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'courses', filter: `user_id=eq.${currentUser.id}` },
+        () => handleRealtimeChange())
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'events', filter: `user_id=eq.${currentUser.id}` },
+        () => handleRealtimeChange())
+      .subscribe();
+  }
+
+  let realtimeTimer = null;
+  function handleRealtimeChange() {
+    setSyncStatus('syncing', '🔄 同步中…');
+    if (realtimeTimer) clearTimeout(realtimeTimer);
+    realtimeTimer = setTimeout(() => {
+      loadAllData();
+    }, 500);
+  }
+
+  // ==================== 渲染任务池 ====================
+  function renderTasks() {
+    $('taskCount').textContent = tasks.length;
+    if (tasks.length === 0) {
+      taskList.innerHTML = '<div style="font-size:0.75rem; color:#94a3b8; text-align:center; padding:0.5rem;">暂无待办任务</div>';
+      return;
+    }
+    const pOrder = { high: 0, medium: 1, low: 2 };
+    const sorted = [...tasks].sort((a,b) => {
+      const pa = pOrder[a.priority] ?? 1, pb = pOrder[b.priority] ?? 1;
+      if (pa !== pb) return pa - pb;
+      if (a.deadline && b.deadline) return new Date(a.deadline) - new Date(b.deadline);
+      if (a.deadline) return -1;
+      if (b.deadline) return 1;
+      return 0;
+    });
+    const now = new Date();
+    taskList.innerHTML = sorted.map(t => {
+      const pLabel = { high: '🔴', medium: '🟡', low: '🟢' }[t.priority || 'medium'];
+      let dlHtml = '';
+      if (t.deadline) {
+        const dl = new Date(t.deadline);
+        const overdue = dl < now;
+        const dlStr = `${dl.getMonth()+1}/${dl.getDate()} ${pad(dl.getHours())}:${pad(dl.getMinutes())}`;
+        dlHtml = `<span class="${overdue ? 'dl-overdue' : ''}">⏰${dlStr}${overdue ? ' 已过期' : ''}</span>`;
+      }
+      return `
+        <div class="task-item p-${t.priority || 'medium'}">
+          <span>${pLabel}</span>
+          <span class="name" title="${escapeHtml(t.name)}">${escapeHtml(t.name)}</span>
+          <span class="meta">
+            <span>${fmtDur(t.duration)}</span>
+            ${dlHtml}
+          </span>
+          <button class="del" data-id="${t.id}" title="删除">✕</button>
+        </div>
+      `;
+    }).join('');
+    taskList.querySelectorAll('.del').forEach(b => {
+      b.onclick = async () => {
+        const id = b.dataset.id;
+        tasks = tasks.filter(x => x.id !== id);
+        renderTasks();
+        await syncTaskToCloud({ id }, 'delete');
+      };
+    });
+  }
+
+  // ==================== 渲染课程 ====================
+  function renderCourses() {
+    $('courseCount').textContent = courses.length;
+    if (courses.length === 0) {
+      courseList.innerHTML = '<div style="font-size:0.75rem; color:#94a3b8; text-align:center; padding:0.5rem;">暂无占用时间<br>在日历上拖拽创建</div>';
+      return;
+    }
+    const sorted = [...courses].sort((a,b) => a.dayOfWeek - b.dayOfWeek || toMin(a.start) - toMin(b.start));
+    courseList.innerHTML = sorted.map(c => {
+      const col = c.color || COLOR_POOL[0];
+      return `
+        <div class="course-item" style="background:${col.bg}; border-left-color:${col.border}; color:${col.text};">
+          <div class="info">
+            <span class="cname">${escapeHtml(c.name)}</span>
+            <span class="ctime">${DOW_NAMES[c.dayOfWeek]} ${c.start}–${c.end}</span>
+          </div>
+          <button class="del" data-id="${c.id}" title="删除">✕</button>
+        </div>
+      `;
+    }).join('');
+    courseList.querySelectorAll('.del').forEach(b => {
+      b.onclick = async () => {
+        const id = b.dataset.id;
+        courses = courses.filter(x => x.id !== id);
+        renderCourses(); renderCalendar();
+        await syncCourseToCloud({ id }, 'delete');
+      };
+    });
+  }
+
+  // ==================== 用餐 ====================
+  function getMealBlocks() {
+    const blocks = [];
+    if (settings.meal_start && settings.meal_end && toMin(settings.meal_start) < toMin(settings.meal_end)) {
+      blocks.push({ start: settings.meal_start, end: settings.meal_end, name: '🍽️ 午餐', type: 'meal' });
+    }
+    if (settings.dinner_start && settings.dinner_end && toMin(settings.dinner_start) < toMin(settings.dinner_end)) {
+      blocks.push({ start: settings.dinner_start, end: settings.dinner_end, name: '🍽️ 晚餐', type: 'meal' });
+    }
+    return blocks;
+  }
+
+  function getDayBusy(dk) {
+    const d = parseDate(dk);
+    const dow = d.getDay();
+    const busy = [];
+    courses.filter(c => c.dayOfWeek === dow).forEach(c => {
+      busy.push({ start: toMin(c.start), end: toMin(c.end) });
+    });
+    events.filter(e => e.date === dk).forEach(e => {
+      busy.push({ start: toMin(e.start), end: toMin(e.end) });
+    });
+    getMealBlocks().forEach(m => {
+      busy.push({ start: toMin(m.start), end: toMin(m.end) });
+    });
+    return busy;
+  }
+
+  function mergeBusy(busy) {
+    busy.sort((a,b) => a.start - b.start);
+    const merged = [];
+    for (const b of busy) {
+      if (merged.length === 0 || b.start > merged[merged.length-1].end) {
+        merged.push({ ...b });
+      } else {
+        merged[merged.length-1].end = Math.max(merged[merged.length-1].end, b.end);
+      }
+    }
+    return merged;
+  }
+
+  function computeFreeSlots(dk) {
+    const merged = mergeBusy(getDayBusy(dk));
+    const dayStart = toMin(settings.day_start);
+    const dayEnd = toMin(settings.day_end);
+    const free = [];
+    let cur = dayStart;
+    for (const b of merged) {
+      if (b.start > cur) {
+        const dur = b.start - cur;
+        if (dur >= settings.min_slot) {
+          free.push({ start: toTime(cur), end: toTime(b.start), duration: dur });
+        }
+      }
+      cur = Math.max(cur, b.end);
+    }
+    if (cur < dayEnd) {
+      const dur = dayEnd - cur;
+      if (dur >= settings.min_slot) {
+        free.push({ start: toTime(cur), end: toTime(dayEnd), duration: dur });
+      }
+    }
+    return free;
+  }
+
+  // ==================== 突发事件挤占顺延 ====================
+  async function makeRoom(dk, insertStart, insertEnd) {
+    const dd = parseDate(dk);
+    const dw = dd.getDay();
+
+    const hardItems = [];
+    courses.filter(c => c.dayOfWeek === dw).forEach(c => {
+      hardItems.push({ start: toMin(c.start), end: toMin(c.end), name: c.name });
+    });
+    getMealBlocks().forEach(m => {
+      hardItems.push({ start: toMin(m.start), end: toMin(m.end), name: m.name });
+    });
+
+    for (const h of hardItems) {
+      if (insertStart < h.end && insertEnd > h.start) {
+        return { success: false, reason: `与「${h.name}」冲突（${toTime(h.start)}-${toTime(h.end)}）` };
+      }
+    }
+
+    const movable = events.filter(e => e.date === dk)
+      .sort((a,b) => toMin(a.start) - toMin(b.start));
+
+    const allToShift = movable.filter(e => {
+      const s = toMin(e.start), en = toMin(e.end);
+      return (s < insertEnd && en > insertStart) || (s >= insertStart && s < insertEnd);
+    }).sort((a,b) => toMin(a.start) - toMin(b.start));
+
+    if (allToShift.length === 0) {
+      return { success: true, movedCount: 0, truncatedCount: 0 };
+    }
+
+    let cursor = insertEnd;
+    const shifted = [];
+    const truncated = [];
+    const dayEnd = toMin(settings.day_end);
+    const gap = settings.task_gap || 0;
+
+    for (const ev of allToShift) {
+      const dur = toMin(ev.end) - toMin(ev.start);
+      let newStart = cursor;
+      let newEnd = newStart + dur;
+      let guard = 0;
+      while (guard++ < 50) {
+        const conflictHard = hardItems.find(h => newStart < h.end && newEnd > h.start);
+        if (!conflictHard) break;
+        newStart = conflictHard.end;
+        newEnd = newStart + dur;
+      }
+      if (newEnd > dayEnd) {
+        truncated.push(ev);
+        continue;
+      }
+      shifted.push({ id: ev.id, newStart, newEnd });
+      cursor = newEnd + gap;
+    }
+
+    const updatePromises = shifted.map(sh => {
+      const ev = events.find(e => e.id === sh.id);
+      if (!ev) return Promise.resolve();
+      ev.start = toTime(sh.newStart);
+      ev.end = toTime(sh.newEnd);
+      return syncEventToCloud(ev);
+    });
+
+    for (const tr of truncated) {
+      const ev = events.find(e => e.id === tr.id);
+      if (ev) {
+        const newTask = {
+          id: uid(),
+          name: ev.name,
+          duration: toMin(ev.end) - toMin(ev.start),
+          priority: ev.priority || 'medium',
+          deadline: null
+        };
+        tasks.push(newTask);
+        events = events.filter(e => e.id !== ev.id);
+        await syncEventToCloud({ id: ev.id }, 'delete');
+        await syncTaskToCloud(newTask);
+      }
+    }
+
+    await Promise.all(updatePromises);
+    return { success: true, movedCount: shifted.length, truncatedCount: truncated.length };
+  }
+
+  // ==================== 日历渲染 ====================
+  function renderCalendar() {
+    const weekStart = getWeekStart(viewDate);
+    const weekEnd = addDays(weekStart, 6);
+    calendarTitle.textContent = `${weekStart.getFullYear()}年 ${weekStart.getMonth()+1}月${weekStart.getDate()}日 – ${weekEnd.getMonth()+1}月${weekEnd.getDate()}日`;
+
+    const dayStart = toMin(settings.day_start);
+    const dayEnd = toMin(settings.day_end);
+    const totalMin = dayEnd - dayStart;
+    const totalHeight = (totalMin / 60) * HOUR_HEIGHT;
+
+    const today = new Date(); today.setHours(0,0,0,0);
+    const todayKey = dateKey(today);
+    const now = new Date();
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+
+    let html = '<div class="week-view">';
+
+    html += `<div class="time-col-header"></div>`;
+    for (let i = 0; i < 7; i++) {
+      const d = addDays(weekStart, i);
+      const dk = dateKey(d);
+      const isToday = dk === todayKey;
+      html += `
+        <div class="day-header ${isToday ? 'today' : ''}" data-date="${dk}">
+          <div class="dow">${DOW_NAMES[d.getDay()]}</div>
+          <div class="date">${d.getDate()}</div>
+        </div>
+      `;
+    }
+
+    html += `<div class="time-axis" style="height:${totalHeight}px;">`;
+    for (let m = dayStart; m <= dayEnd; m += 60) {
+      const top = ((m - dayStart) / 60) * HOUR_HEIGHT;
+      const label = toTime(m);
+      const isNoon = m === 12*60;
+      html += `<div class="time-label ${isNoon ? 'noon-line' : 'hour-line'}" style="top:${top}px;">${label}</div>`;
+    }
+    html += `</div>`;
+
+    for (let i = 0; i < 7; i++) {
+      const d = addDays(weekStart, i);
+      const dk = dateKey(d);
+      const isToday = dk === todayKey;
+      html += `<div class="day-column ${isToday ? 'today-col' : ''}" data-date="${dk}" style="height:${totalHeight}px;">`;
+
+      for (let m = dayStart; m <= dayEnd; m += 60) {
+        const top = ((m - dayStart) / 60) * HOUR_HEIGHT;
+        const isMajor = (m % 120 === 0);
+        html += `<div class="hour-cell ${isMajor ? 'major' : ''}" style="top:${top}px;"></div>`;
+      }
+
+      getMealBlocks().forEach(m => {
+        const top = ((toMin(m.start) - dayStart) / 60) * HOUR_HEIGHT;
+        const height = ((toMin(m.end) - toMin(m.start)) / 60) * HOUR_HEIGHT;
+        html += `
+          <div class="event-block" style="top:${top}px; height:${height}px; background:#fef3c7; border-left-color:#f59e0b; color:#92400e; opacity:0.85; pointer-events:none; z-index:1;">
+            <span class="ev-name">${m.name}</span>
+            <span class="ev-time">${m.start}–${m.end}</span>
+          </div>
+        `;
+      });
+
+      const dow = d.getDay();
+      courses.filter(c => c.dayOfWeek === dow).forEach(c => {
+        const top = ((toMin(c.start) - dayStart) / 60) * HOUR_HEIGHT;
+        const height = ((toMin(c.end) - toMin(c.start)) / 60) * HOUR_HEIGHT;
+        const col = c.color || COLOR_POOL[0];
+        html += `
+          <div class="event-block course" data-course-id="${c.id}" data-date="${dk}" data-type="course"
+               style="top:${top}px; height:${Math.max(height, 18)}px; background:${col.bg}; border-left-color:${col.border}; color:${col.text};">
+            <span class="ev-name">${escapeHtml(c.name)}</span>
+            <span class="ev-time">${c.start}–${c.end}</span>
+          </div>
+        `;
+      });
+
+      events.filter(e => e.date === dk).forEach(e => {
+        const top = ((toMin(e.start) - dayStart) / 60) * HOUR_HEIGHT;
+        const height = ((toMin(e.end) - toMin(e.start)) / 60) * HOUR_HEIGHT;
+        const col = e.urgent ? URGENT_COLOR : (e.color || COLOR_POOL[0]);
+        const doneCls = e.done ? 'done' : '';
+        const pMark = e.priority === 'high' && !e.urgent ? '🔴 ' : e.priority === 'low' ? '🟢 ' : '';
+        const urgentStyle = e.urgent ? 'box-shadow:0 0 0 2px #ef4444 inset;' : '';
+        html += `
+          <div class="event-block ${doneCls}" data-event-id="${e.id}" data-date="${dk}" data-type="event"
+               style="top:${top}px; height:${Math.max(height, 18)}px; background:${col.bg}; border-left-color:${col.border}; color:${col.text};${urgentStyle}">
+            <span class="ev-name">${e.urgent ? '⚡' : ''}${pMark}${escapeHtml(e.name)}</span>
+            <span class="ev-time">${e.start}–${e.end}</span>
+          </div>
+        `;
+      });
+
+      if (isToday && nowMin >= dayStart && nowMin <= dayEnd) {
+        const top = ((nowMin - dayStart) / 60) * HOUR_HEIGHT;
+        html += `<div class="now-line" style="top:${top}px;"></div>`;
+      }
+
+      html += `</div>`;
+    }
+
+    html += '</div>';
+    calendarBody.innerHTML = html;
+    bindCalendarEvents();
+  }
+
+  function bindCalendarEvents() {
+    calendarBody.querySelectorAll('.day-header').forEach(h => {
+      h.onclick = () => {
+        viewDate = parseDate(h.dataset.date);
+        renderCalendar();
+      };
+    });
+    calendarBody.querySelectorAll('.event-block[data-event-id]').forEach(b => {
+      b.onclick = (ev) => {
+        ev.stopPropagation();
+        openEventModal(b.dataset.eventId);
+      };
+    });
+    calendarBody.querySelectorAll('.event-block[data-course-id]').forEach(b => {
+      b.onclick = (ev) => {
+        ev.stopPropagation();
+        openCourseModal(b.dataset.courseId);
+      };
+    });
+    setupDragCreate();
+  }
+
+  // ==================== 拖拽创建 ====================
+  function setupDragCreate() {
+    let dragging = false;
+    let dragStartY = 0;
+    let dragStartMin = 0;
+    let ghost = null;
+    let dragDate = null;
+
+    calendarBody.querySelectorAll('.day-column').forEach(col => {
+      col.addEventListener('mousedown', (e) => {
+        if (e.target.closest('.event-block')) return;
+        if (e.button !== 0) return;
+        e.preventDefault();
+
+        dragDate = col.dataset.date;
+        const rect = col.getBoundingClientRect();
+        dragStartY = e.clientY - rect.top;
+        const dayStart = toMin(settings.day_start);
+        dragStartMin = Math.round((dragStartY / HOUR_HEIGHT) * 60 / 5) * 5 + dayStart;
+
+        dragging = true;
+        ghost = document.createElement('div');
+        ghost.className = 'drag-ghost';
+        ghost.style.top = dragStartY + 'px';
+        ghost.style.height = '0px';
+        col.appendChild(ghost);
+
+        const onMove = (ev) => {
+          if (!dragging) return;
+          const y = ev.clientY - rect.top;
+          const top = Math.min(dragStartY, y);
+          const height = Math.abs(y - dragStartY);
+          ghost.style.top = top + 'px';
+          ghost.style.height = Math.max(height, 4) + 'px';
+          const min = Math.round((height / HOUR_HEIGHT) * 60);
+          ghost.textContent = fmtDur(min);
+        };
+
+        const onUp = (ev) => {
+          if (!dragging) return;
+          dragging = false;
+          document.removeEventListener('mousemove', onMove);
+          document.removeEventListener('mouseup', onUp);
+
+          const y = ev.clientY - rect.top;
+          const top = Math.min(dragStartY, y);
+          const height = Math.abs(y - dragStartY);
+          const minDur = Math.round((height / HOUR_HEIGHT) * 60);
+
+          if (ghost && ghost.parentNode) ghost.parentNode.removeChild(ghost);
+          ghost = null;
+
+          if (minDur < 15) {
+            openCreateModal(dragDate, toTime(dragStartMin), toTime(dragStartMin + 60), 60);
+            return;
+          }
+          const startMin = Math.round((top / HOUR_HEIGHT) * 60 / 5) * 5 + toMin(settings.day_start);
+          const endMin = startMin + Math.round(minDur / 5) * 5;
+          openCreateModal(dragDate, toTime(startMin), toTime(endMin), endMin - startMin);
+        };
+
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+      });
+    });
+  }
+
+  // ==================== 创建弹窗 ====================
+  function openCreateModal(date, start, end, durationMin) {
+    const dd = parseDate(date);
+    const dw = dd.getDay();
+    const conflictHard = courses.some(c =>
+      c.dayOfWeek === dw && toMin(start) < toMin(c.end) && toMin(end) > toMin(c.start)
+    ) || getMealBlocks().some(m =>
+      toMin(start) < toMin(m.end) && toMin(end) > toMin(m.start)
+    );
+    const conflictEvents = events.filter(e =>
+      e.date === date && toMin(start) < toMin(e.end) && toMin(end) > toMin(e.start)
+    );
+
+    let warnHtml = '';
+    if (conflictHard) {
+      warnHtml = `<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:0.7rem;padding:0.6rem 0.8rem;font-size:0.78rem;color:#991b1b;margin-bottom:0.7rem;line-height:1.4;">⚠️ 该时段与课程/用餐冲突，<b>不可创建</b>。</div>`;
+    } else if (conflictEvents.length > 0) {
+      warnHtml = `<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:0.7rem;padding:0.6rem 0.8rem;font-size:0.78rem;color:#1e40af;margin-bottom:0.7rem;line-height:1.4;">ℹ️ 该时段与 ${conflictEvents.length} 个任务重叠。<br>选「⚡ 突发事件」会自动把它们及后续任务顺延。</div>`;
+    }
+
+    const colorChoices = COLOR_POOL.map((c, i) =>
+      `<div class="color-swatch" data-color-index="${i}" style="background:${c.bg}; border-color:${c.border};" title="颜色${i+1}"></div>`
+    ).join('');
+    const defaultColorIdx = Math.floor(Math.random() * COLOR_POOL.length);
+
+    modalContent.innerHTML = `
+      <h3>➕ 创建 <button class="close" onclick="document.getElementById('modalOverlay').classList.remove('show')">✕</button></h3>
+      ${warnHtml}
+      <div class="field">
+        <label>类型</label>
+        <select class="input" id="mType">
+          <option value="task">📌 任务（避开已有）</option>
+          <option value="urgent">⚡ 突发事件（挤占并顺延）</option>
+          <option value="course">📚 课程/固定占用（每周重复）</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>名称</label>
+        <input class="input" id="mName" placeholder="例如：开会 / 高等数学" maxlength="40" autofocus>
+      </div>
+      <div class="field" id="mDateField">
+        <label>日期</label>
+        <input class="input" id="mDate" type="date" value="${date}">
+      </div>
+      <div class="field">
+        <label>时间段</label>
+        <div class="input-row">
+          <input class="input" id="mStart" type="time" value="${start}">
+          <span style="color:var(--gray);">—</span>
+          <input class="input" id="mEnd" type="time" value="${end}">
+        </div>
+        <div style="font-size:0.72rem; color:var(--gray); margin-top:0.25rem;">时长：<b id="mDurLabel">${fmtDur(durationMin)}</b></div>
+      </div>
+      <div class="field" id="mColorField">
+        <label>颜色</label>
+        <div class="color-picker" id="mColorPicker">
+          ${colorChoices}
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-outline" onclick="document.getElementById('modalOverlay').classList.remove('show')">取消</button>
+        <button class="btn btn-primary" id="mSave">保存</button>
+      </div>
+    `;
+    modalOverlay.classList.add('show');
+    $('mName').focus();
+
+    const updateFields = () => {
+      const t = $('mType').value;
+      $('mDateField').style.display = t === 'course' ? 'none' : 'block';
+      $('mColorField').style.display = t === 'urgent' ? 'none' : 'block';
+    };
+    $('mType').onchange = updateFields;
+    updateFields();
+
+    const updateDur = () => {
+      const s = toMin($('mStart').value);
+      const e = toMin($('mEnd').value);
+      if (e > s) $('mDurLabel').textContent = fmtDur(e - s);
+    };
+    $('mStart').onchange = updateDur;
+    $('mEnd').onchange = updateDur;
+
+    let selectedColorIdx = defaultColorIdx;
+    const swatches = modalContent.querySelectorAll('.color-swatch');
+    const updateSelected = () => {
+      swatches.forEach((sw, i) => sw.classList.toggle('selected', i === selectedColorIdx));
+    };
+    swatches.forEach((sw, i) => {
+      sw.onclick = () => { selectedColorIdx = i; updateSelected(); };
+    });
+    updateSelected();
+
+    $('mSave').onclick = async () => {
+      const name = $('mName').value.trim();
+      const type = $('mType').value;
+      const s = $('mStart').value;
+      const e = $('mEnd').value;
+      if (!name) { alert('请输入名称'); return; }
+      if (!s || !e || toMin(s) >= toMin(e)) { alert('时间无效'); return; }
+
+      if (type === 'course') {
+        const dd2 = parseDate(date);
+        const dw2 = dd2.getDay();
+        const conflict = courses.some(c =>
+          c.dayOfWeek === dw2 && toMin(s) < toMin(c.end) && toMin(e) > toMin(c.start)
+        ) || events.some(ev =>
+          ev.date === date && toMin(s) < toMin(ev.end) && toMin(e) > toMin(ev.start)
+        );
+        if (conflict) { alert('该时段与已有安排冲突，请调整'); return; }
+        const col = COLOR_POOL[selectedColorIdx];
+        const newCourse = { id: uid(), name, dayOfWeek: dw2, start: s, end: e, color: col };
+        courses.push(newCourse);
+        await syncCourseToCloud(newCourse);
+        showToast('课程已创建');
+      } else if (type === 'urgent') {
+        const dk = $('mDate').value;
+        const dd2 = parseDate(dk);
+        const dw2 = dd2.getDay();
+        const hardConflict = courses.some(c =>
+          c.dayOfWeek === dw2 && toMin(s) < toMin(c.end) && toMin(e) > toMin(c.start)
+        ) || getMealBlocks().some(m =>
+          toMin(s) < toMin(m.end) && toMin(e) > toMin(m.start)
+        );
+        if (hardConflict) { alert('该时段与课程/用餐冲突，无法挤占'); return; }
+
+        const result = await makeRoom(dk, toMin(s), toMin(e));
+        if (!result.success) { alert('无法创建：' + result.reason); return; }
+
+        const newEvent = {
+          id: uid(), name, date: dk, start: s, end: e,
+          type: 'event', duration: toMin(e) - toMin(s),
+          done: false, priority: 'high', urgent: true,
+          color: URGENT_COLOR
+        };
+        events.push(newEvent);
+        await syncEventToCloud(newEvent);
+
+        let msg = '⚡ 突发事件已创建';
+        if (result.movedCount > 0) msg += `，${result.movedCount} 个任务已顺延`;
+        if (result.truncatedCount > 0) msg += `，${result.truncatedCount} 个超时放回任务池`;
+        showToast(msg);
+      } else {
+        const dk = $('mDate').value;
+        const dd2 = parseDate(dk);
+        const dw2 = dd2.getDay();
+        const hardConflict = courses.some(c =>
+          c.dayOfWeek === dw2 && toMin(s) < toMin(c.end) && toMin(e) > toMin(c.start)
+        ) || getMealBlocks().some(m =>
+          toMin(s) < toMin(m.end) && toMin(e) > toMin(m.start)
+        );
+        if (hardConflict) { alert('该时段与课程/用餐冲突'); return; }
+        const conflict = events.some(ev =>
+          ev.date === dk && toMin(s) < toMin(ev.end) && toMin(e) > toMin(ev.start)
+        );
+        if (conflict) { alert('该时段已有任务。如需挤占请选「突发事件」。'); return; }
+
+        const col = COLOR_POOL[selectedColorIdx];
+        const newEvent = {
+          id: uid(), name, date: dk, start: s, end: e,
+          type: 'event', duration: toMin(e) - toMin(s),
+          color: col, done: false, priority: 'medium', urgent: false
+        };
+        events.push(newEvent);
+        await syncEventToCloud(newEvent);
+        showToast('已创建');
+      }
+
+      modalOverlay.classList.remove('show');
+      renderCourses(); renderCalendar(); renderTasks();
+    };
+  }
+
+  // ==================== 编辑事件 ====================
+  function openEventModal(eventId) {
+    const ev = events.find(e => e.id === eventId);
+    if (!ev) return;
+
+    modalContent.innerHTML = `
+      <h3>📝 编辑 ${ev.urgent ? '⚡突发事件' : '事件'} <button class="close" onclick="document.getElementById('modalOverlay').classList.remove('show')">✕</button></h3>
+      <div class="field">
+        <label>名称</label>
+        <input class="input" id="mEvName" value="${escapeHtml(ev.name)}">
+      </div>
+      <div class="field">
+        <label>日期</label>
+        <input class="input" id="mEvDate" type="date" value="${ev.date}">
+      </div>
+      <div class="field">
+        <label>时间段</label>
+        <div class="input-row">
+          <input class="input" id="mEvStart" type="time" value="${ev.start}">
+          <span style="color:var(--gray);">—</span>
+          <input class="input" id="mEvEnd" type="time" value="${ev.end}">
+        </div>
+      </div>
+      <div class="field">
+        <label>优先级</label>
+        <select class="input" id="mEvPriority">
+          <option value="high" ${ev.priority==='high'?'selected':''}>🔴 高</option>
+          <option value="medium" ${ev.priority==='medium'||!ev.priority?'selected':''}>🟡 中</option>
+          <option value="low" ${ev.priority==='low'?'selected':''}>🟢 低</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>状态</label>
+        <select class="input" id="mEvDone">
+          <option value="0" ${!ev.done?'selected':''}>未完成</option>
+          <option value="1" ${ev.done?'selected':''}>已完成</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>类型</label>
+        <select class="input" id="mEvUrgent">
+          <option value="0" ${!ev.urgent?'selected':''}>普通任务</option>
+          <option value="1" ${ev.urgent?'selected':''}>⚡ 突发事件</option>
+        </select>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-danger" id="mEvDelete">删除</button>
+        <button class="btn btn-outline" onclick="document.getElementById('modalOverlay').classList.remove('show')">取消</button>
+        <button class="btn btn-primary" id="mEvSave">保存</button>
+      </div>
+    `;
+    modalOverlay.classList.add('show');
+
+    $('mEvSave').onclick = async () => {
+      ev.name = $('mEvName').value.trim();
+      ev.date = $('mEvDate').value;
+      ev.start = $('mEvStart').value;
+      ev.end = $('mEvEnd').value;
+      ev.priority = $('mEvPriority').value;
+      ev.done = $('mEvDone').value === '1';
+      ev.urgent = $('mEvUrgent').value === '1';
+      if (ev.urgent) ev.color = URGENT_COLOR;
+      if (!ev.name) { alert('请输入名称'); return; }
+      if (toMin(ev.start) >= toMin(ev.end)) { alert('时间无效'); return; }
+      await syncEventToCloud(ev);
+      modalOverlay.classList.remove('show');
+      renderCalendar();
+      showToast('已保存');
+    };
+    $('mEvDelete').onclick = async () => {
+      if (!confirm('确定删除这个事件吗？')) return;
+      events = events.filter(e => e.id !== ev.id);
+      await syncEventToCloud({ id: ev.id }, 'delete');
+      modalOverlay.classList.remove('show');
+      renderCalendar();
+      showToast('已删除');
+    };
+  }
+
+  // ==================== 编辑课程 ====================
+  function openCourseModal(courseId) {
+    const c = courses.find(x => x.id === courseId);
+    if (!c) return;
+
+    modalContent.innerHTML = `
+      <h3>📚 编辑课程 <button class="close" onclick="document.getElementById('modalOverlay').classList.remove('show')">✕</button></h3>
+      <div class="field">
+        <label>课程名</label>
+        <input class="input" id="mCName" value="${escapeHtml(c.name)}">
+      </div>
+      <div class="field">
+        <label>星期</label>
+        <select class="input" id="mCDay">
+          ${[1,2,3,4,5,6,0].map(d => `<option value="${d}" ${c.dayOfWeek===d?'selected':''}>${DOW_NAMES[d]}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field">
+        <label>时间段</label>
+        <div class="input-row">
+          <input class="input" id="mCStart" type="time" value="${c.start}">
+          <span style="color:var(--gray);">—</span>
+          <input class="input" id="mCEnd" type="time" value="${c.end}">
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-danger" id="mCDelete">删除</button>
+        <button class="btn btn-outline" onclick="document.getElementById('modalOverlay').classList.remove('show')">取消</button>
+        <button class="btn btn-primary" id="mCSave">保存</button>
+      </div>
+    `;
+    modalOverlay.classList.add('show');
+
+    $('mCSave').onclick = async () => {
+      c.name = $('mCName').value.trim();
+      c.dayOfWeek = Number($('mCDay').value);
+      c.start = $('mCStart').value;
+      c.end = $('mCEnd').value;
+      if (!c.name) { alert('请输入课程名'); return; }
+      if (toMin(c.start) >= toMin(c.end)) { alert('时间无效'); return; }
+      await syncCourseToCloud(c);
+      modalOverlay.classList.remove('show');
+      renderCourses(); renderCalendar();
+      showToast('已保存');
+    };
+    $('mCDelete').onclick = async () => {
+      if (!confirm('确定删除这门课程吗？')) return;
+      courses = courses.filter(x => x.id !== c.id);
+      await syncCourseToCloud({ id: c.id }, 'delete');
+      modalOverlay.classList.remove('show');
+      renderCourses(); renderCalendar();
+      showToast('已删除');
+    };
+  }
+
+  // ==================== 智能排程 ====================
+  async function autoSchedule() {
+    if (tasks.length === 0) { showToast('任务池是空的'); return; }
+
+    showLoading('排程中…');
+    try {
+      const now = new Date();
+      const nowKey = dateKey(now);
+      const nowMin = now.getHours() * 60 + now.getMinutes();
+      const gap = settings.task_gap || 0;
+
+      const dates = [];
+      for (let i = 0; i < 14; i++) {
+        dates.push(dateKey(addDays(new Date(now.getFullYear(), now.getMonth(), now.getDate()), i)));
+      }
+
+      const pOrder = { high: 0, medium: 1, low: 2 };
+      const pending = [...tasks].sort((a,b) => {
+        const pa = pOrder[a.priority] ?? 1, pb = pOrder[b.priority] ?? 1;
+        if (pa !== pb) return pa - pb;
+        if (a.deadline && b.deadline) return new Date(a.deadline) - new Date(b.deadline);
+        if (a.deadline) return -1;
+        if (b.deadline) return 1;
+        return b.duration - a.duration;
+      });
+
+      let scheduledCount = 0;
+      const scheduledIds = new Set();
+      const newEvents = [];
+
+      for (const dk of dates) {
+        if (scheduledIds.size >= pending.length) break;
+        const freeSlots = computeFreeSlots(dk);
+        if (freeSlots.length === 0) continue;
+
+        let slots = freeSlots.map(f => ({ start: toMin(f.start), end: toMin(f.end) }));
+
+        if (dk === nowKey) {
+          slots = slots.map(s => ({ ...s, start: Math.max(s.start, nowMin) })).filter(s => s.end - s.start >= settings.min_slot);
+        }
+
+        for (let i = 0; i < pending.length; i++) {
+          const task = pending[i];
+          if (scheduledIds.has(task.id)) continue;
+          for (let j = 0; j < slots.length; j++) {
+            const slot = slots[j];
+            if (slot.end - slot.start >= task.duration) {
+              const start = slot.start;
+              const end = start + task.duration;
+              const col = nextColor();
+              const newEvent = {
+                id: uid(), name: task.name, date: dk,
+                start: toTime(start), end: toTime(end),
+                type: 'event', duration: task.duration,
+                color: col, done: false,
+                priority: task.priority || 'medium',
+                urgent: false
+              };
+              events.push(newEvent);
+              newEvents.push(newEvent);
+              scheduledIds.add(task.id);
+              scheduledCount++;
+
+              const consumeEnd = end + gap;
+              if (consumeEnd < slot.end) {
+                slot.start = consumeEnd;
+              } else {
+                slots.splice(j, 1);
+              }
+              break;
+            }
+          }
+        }
+      }
+
+      for (const ev of newEvents) {
+        await syncEventToCloud(ev);
+      }
+      const taskIdsToDelete = Array.from(scheduledIds);
+      tasks = tasks.filter(t => !scheduledIds.has(t.id));
+      for (const tid of taskIdsToDelete) {
+        await syncTaskToCloud({ id: tid }, 'delete');
+      }
+
+      renderTasks();
+      renderCalendar();
+
+      if (scheduledCount > 0) {
+        showToast(`✅ 已自动安排 ${scheduledCount} 个任务（含 ${gap} 分钟间隔）`);
+      } else {
+        showToast('⚠️ 没有找到合适的空闲时段');
+      }
+    } finally {
+      hideLoading();
+    }
+  }
+
+  // ==================== 批量导入 ====================
+  async function bulkImport() {
+    const text = $('bulkInput').value.trim();
+    if (!text) { showToast('请输入要导入的内容'); return; }
+    const lines = text.split('\n');
+    let added = 0, failed = 0;
+    const newCourses = [];
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const parts = trimmed.split(/[,，\t]+/).map(s => s.trim()).filter(Boolean);
+      if (parts.length < 4) { failed++; continue; }
+      const [name, dayStr, start, end] = parts;
+      let dayOfWeek = parseInt(dayStr);
+      if (isNaN(dayOfWeek)) {
+        const map = {'周日':0,'周天':0,'周一':1,'周二':2,'周三':3,'周四':4,'周五':5,'周六':6,
+                     '星期日':0,'星期天':0,'星期一':1,'星期二':2,'星期三':3,'星期四':4,'星期五':5,'星期六':6};
+        dayOfWeek = map[dayStr];
+      }
+      if (dayOfWeek === 7) dayOfWeek = 0;
+      if (!name || isNaN(dayOfWeek) || dayOfWeek < 0 || dayOfWeek > 6) { failed++; continue; }
+      if (!/^\d{1,2}:\d{2}$/.test(start) || !/^\d{1,2}:\d{2}$/.test(end)) { failed++; continue; }
+      if (toMin(start) >= toMin(end)) { failed++; continue; }
+      const dup = courses.some(c => c.name === name && c.dayOfWeek === dayOfWeek && c.start === start && c.end === end);
+      if (dup) { failed++; continue; }
+      const col = nextColor();
+      const newCourse = { id: uid(), name, dayOfWeek, start, end, color: col };
+      courses.push(newCourse);
+      newCourses.push(newCourse);
+      added++;
+    }
+
+    for (const c of newCourses) {
+      await syncCourseToCloud(c);
+    }
+
+    if (added > 0) {
+      renderCourses(); renderCalendar();
+      $('bulkInput').value = '';
+      showToast(`✅ 导入 ${added} 门课程${failed ? `，${failed} 行跳过` : ''}`);
+    } else {
+      showToast('❌ 没有成功导入，请检查格式');
+    }
+  }
+
+  // ==================== 清空 ====================
+  async function clearAll() {
+    if (!confirm('确定清空所有数据吗？')) return;
+    if (!confirm('再次确认：真的要清空吗？')) return;
+    showLoading('清空中…');
+    try {
+      await Promise.all([
+        sb.from('tasks').delete().eq('user_id', currentUser.id),
+        sb.from('courses').delete().eq('user_id', currentUser.id),
+        sb.from('events').delete().eq('user_id', currentUser.id)
+      ]);
+      tasks = []; courses = []; events = [];
+      renderTasks(); renderCourses(); renderCalendar();
+      showToast('已清空');
+    } catch (err) {
+      showToast('清空失败：' + err.message);
+    } finally {
+      hideLoading();
+    }
+  }
+
+  function getWeekStart(d) {
+    const r = new Date(d);
+    const day = r.getDay();
+    const diff = day === 0 ? -6 : 1 - day;
+    r.setDate(r.getDate() + diff);
+    r.setHours(0,0,0,0);
+    return r;
+  }
+
+  // ==================== 事件绑定 ====================
+  function bind() {
+    $('authBtn').onclick = handleAuth;
+    $('authToggleBtn').onclick = toggleAuthMode;
+    $('authPassword').addEventListener('keypress', e => {
+      if (e.key === 'Enter') handleAuth();
+    });
+    $('logoutBtn').onclick = handleLogout;
+
+    $('addTaskBtn').onclick = async () => {
+      const name = $('taskNameInput').value.trim();
+      const dur = Number($('taskDurInput').value);
+      const priority = $('taskPriorityInput').value;
+      const deadline = $('taskDeadlineInput').value || null;
+      if (!name) { alert('请输入任务名称'); return; }
+      if (!dur || dur < 5) { alert('请输入正确的时长'); return; }
+      const newTask = { id: uid(), name, duration: dur, priority, deadline };
+      tasks.push(newTask);
+      await syncTaskToCloud(newTask);
+      $('taskNameInput').value = '';
+      $('taskDurInput').value = '';
+      $('taskDeadlineInput').value = '';
+      $('taskNameInput').focus();
+      renderTasks();
+      showToast('已加入任务池');
+    };
+    $('taskNameInput').addEventListener('keypress', e => {
+      if (e.key === 'Enter') $('taskDurInput').focus();
+    });
+    $('taskDurInput').addEventListener('keypress', e => {
+      if (e.key === 'Enter') $('addTaskBtn').click();
+    });
+
+    $('bulkImportBtn').onclick = bulkImport;
+    $('autoScheduleBtn').onclick = autoSchedule;
+    $('clearAllBtn').onclick = clearAll;
+
+    $('prevBtn').onclick = () => { viewDate = addDays(viewDate, -7); renderCalendar(); };
+    $('nextBtn').onclick = () => { viewDate = addDays(viewDate, 7); renderCalendar(); };
+    $('todayBtn').onclick = () => { viewDate = new Date(); renderCalendar(); };
+
+    const setSetting = (key, el) => {
+      $(el).onchange = async () => {
+        settings[key] = $(el).value;
+        await syncSettingsToCloud();
+        renderCalendar();
+      };
+    };
+    setSetting('day_start', 'dayStartInput');
+    setSetting('day_end', 'dayEndInput');
+    setSetting('meal_start', 'mealStartInput');
+    setSetting('meal_end', 'mealEndInput');
+    setSetting('dinner_start', 'dinnerStartInput');
+    setSetting('dinner_end', 'dinnerEndInput');
+    $('minSlotInput').onchange = async () => {
+      settings.min_slot = Number($('minSlotInput').value) || 15;
+      await syncSettingsToCloud();
+    };
+    $('taskGapInput').onchange = async () => {
+      settings.task_gap = Number($('taskGapInput').value) || 0;
+      await syncSettingsToCloud();
+      showToast(`任务间隔已设为 ${settings.task_gap} 分钟`);
+    };
+
+    modalOverlay.onclick = e => {
+      if (e.target === modalOverlay) modalOverlay.classList.remove('show');
+    };
+  }
+
+  // ==================== 认证状态监听 ====================
+  sb.auth.onAuthStateChange(async (event, session) => {
+    if (session && session.user) {
+      currentUser = session.user;
+      $('userEmail').textContent = session.user.email;
+      authPage.style.display = 'none';
+      mainApp.style.display = 'grid';
+      await loadAllData();
+      setupRealtime();
+    } else {
+      currentUser = null;
+      authPage.style.display = 'flex';
+      mainApp.style.display = 'none';
+    }
+  });
+
+  function init() {
+    bind();
+    sb.auth.getSession().then(({ data: { session } }) => {
+      if (!session) {
+        authPage.style.display = 'flex';
+        mainApp.style.display = 'none';
+      }
+    });
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>
