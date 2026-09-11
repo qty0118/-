@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>智能周计划 V1.1</title>
+<title>智能周计划 V1.2</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -130,7 +130,8 @@ body { font-family: system-ui,-apple-system,'Segoe UI','Microsoft YaHei',sans-se
 .toast { position:fixed; bottom:1.5rem; left:50%; transform:translateX(-50%) translateY(100px); background:var(--dark); color:white; padding:0.7rem 1.3rem; border-radius:1rem; font-size:0.82rem; z-index:200; transition:transform 0.3s; box-shadow:0 10px 30px rgba(0,0,0,0.2); max-width:90%; text-align:center; }
 .toast.show { transform:translateX(-50%) translateY(0); }
 
-.loading-overlay { position:fixed; inset:0; background:rgba(255,255,255,0.9); display:flex; align-items:center; justify-content:center; z-index:500; flex-direction:column; gap:1rem; }
+/* loading 遮罩 z-index 从 500 降低到 50，避免盖住编辑弹窗 */
+.loading-overlay { position:fixed; inset:0; background:rgba(255,255,255,0.9); display:flex; align-items:center; justify-content:center; z-index:50; flex-direction:column; gap:1rem; }
 .loading-spinner { width:40px; height:40px; border:4px solid #e2e8f0; border-top-color:#3b82f6; border-radius:50%; animation:spin 0.8s linear infinite; }
 @keyframes spin { to { transform:rotate(360deg); } }
 
@@ -141,7 +142,7 @@ body { font-family: system-ui,-apple-system,'Segoe UI','Microsoft YaHei',sans-se
 .doc-modal h4 { font-size:0.9rem; color:var(--dark); margin-top:1rem; margin-bottom:0.4rem; }
 .doc-modal p, .doc-modal li { font-size:0.82rem; color:#475569; line-height:1.6; }
 .doc-modal ul { padding-left:1.2rem; }
-.doc-modal .kbd { background:#f1f5f9; border-radius:0.3rem; padding:0.05rem 0.35rem; font-size:0.75rem; font-family:monospace; }
+.doc-modal .fix-tag { display:inline-block; background:#dcfce7; color:#166534; font-size:0.65rem; padding:0.1rem 0.4rem; border-radius:0.3rem; font-weight:700; margin-right:0.3rem; }
 
 /* 专注模式 */
 .focus-overlay { position:fixed; inset:0; background:linear-gradient(180deg,#1e293b,#0f172a); display:none; flex-direction:column; z-index:300; color:white; }
@@ -153,7 +154,6 @@ body { font-family: system-ui,-apple-system,'Segoe UI','Microsoft YaHei',sans-se
 .focus-top .btns { display:flex; gap:0.5rem; }
 .focus-btn { border:none; border-radius:0.8rem; padding:0.6rem 1.1rem; font-weight:600; cursor:pointer; font-family:inherit; font-size:0.85rem; }
 .focus-btn.pause { background:#f59e0b; color:white; }
-.focus-btn.pause:disabled { background:#475569; cursor:not-allowed; }
 .focus-btn.finish { background:#10b981; color:white; }
 .focus-btn.quit { background:#475569; color:white; }
 .focus-canvas-wrap { flex:1; display:flex; align-items:center; justify-content:center; padding:1rem; position:relative; }
@@ -175,15 +175,12 @@ body { font-family: system-ui,-apple-system,'Segoe UI','Microsoft YaHei',sans-se
 .chart-bar { flex:1; min-width:14px; background:linear-gradient(180deg,#3b82f6,#1e40af); border-radius:4px 4px 0 0; position:relative; transition:0.2s; }
 .chart-bar:hover { opacity:0.8; }
 .chart-bar .bar-val { position:absolute; top:-18px; left:50%; transform:translateX(-50%); font-size:0.6rem; color:var(--gray); white-space:nowrap; }
-.chart-labels { display:flex; gap:4px; font-size:0.6rem; color:var(--gray); margin-top:0.3rem; }
-.chart-labels span { flex:1; min-width:14px; text-align:center; overflow:hidden; }
 
 @media (max-width:1000px){ .sidebar{max-height:none;} .main{max-height:none;} .stats-nums{grid-template-columns:1fr;} }
 </style>
 </head>
 <body>
 
-<!-- 登录页 -->
 <div class="auth-page" id="authPage">
   <div class="auth-card">
     <h1>📅 智能周计划</h1>
@@ -196,13 +193,11 @@ body { font-family: system-ui,-apple-system,'Segoe UI','Microsoft YaHei',sans-se
   </div>
 </div>
 
-<!-- 加载中 -->
 <div class="loading-overlay" id="loadingOverlay" style="display:none;">
   <div class="loading-spinner"></div>
   <div style="color:#64748b; font-size:0.9rem;" id="loadingText">加载中…</div>
 </div>
 
-<!-- 主应用 -->
 <div class="app" id="mainApp" style="display:none;">
   <div class="sidebar">
     <div>
@@ -311,7 +306,6 @@ body { font-family: system-ui,-apple-system,'Segoe UI','Microsoft YaHei',sans-se
 
 <div class="modal-overlay" id="modalOverlay"><div class="modal" id="modalContent"></div></div>
 
-<!-- 专注模式 -->
 <div class="focus-overlay" id="focusOverlay">
   <div class="focus-top">
     <div class="task-info">
@@ -332,7 +326,6 @@ body { font-family: system-ui,-apple-system,'Segoe UI','Microsoft YaHei',sans-se
   <div class="focus-bottom" id="focusBottom">⛰️ 累计专注 <b id="focusTotalMin">0</b> 分钟 · 已登顶 <b id="focusMtnCount">0</b> 座山 · 当前进度 <b id="focusProgressPct">0%</b></div>
 </div>
 
-<!-- 爬山统计 -->
 <div class="stats-overlay" id="statsOverlay">
   <div class="stats-panel">
     <div class="stats-head">
@@ -361,7 +354,7 @@ body { font-family: system-ui,-apple-system,'Segoe UI','Microsoft YaHei',sans-se
 // ============================================================
 const SUPABASE_URL = 'https://vjobutrvjbijlwynpzut.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZqb2J1dHJ2amJpamx3eW5wenV0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwNDA5ODUsImV4cCI6MjEwNDYxNjk4NX0.cSsm6DPqagd3-ieq1Qwb8K7UATMtGDEYji98wAl7mks';
-const APP_VERSION = '1.1';
+const APP_VERSION = '1.2';
 // ============================================================
 
 (function(){
@@ -391,7 +384,14 @@ let isAuthMode = false;
 const $ = id => document.getElementById(id);
 
 // ========== 工具 ==========
-function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+function uid(){
+  if(crypto.randomUUID) return crypto.randomUUID();
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = Math.random()*16|0;
+    const v = c === 'x' ? r : (r&0x3|0x8);
+    return v.toString(16);
+  });
+}
 function pad(n){ return String(n).padStart(2,'0'); }
 function toMin(t){ if(!t) return 0; const [h,m]=t.split(':').map(Number); return h*60+m; }
 function toTime(min){ min=((min%1440)+1440)%1440; return pad(Math.floor(min/60))+':'+pad(min%60); }
@@ -401,11 +401,40 @@ function parseDate(s){ const [y,m,d]=s.split('-').map(Number); return new Date(y
 function addDays(d,n){ const r=new Date(d); r.setDate(r.getDate()+n); return r; }
 function escapeHtml(s){ const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
 function nextColor(){ return {...COLOR_POOL[Math.floor(Math.random()*COLOR_POOL.length)]}; }
-function showToast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2600); }
+function showToast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2800); }
 function setSyncStatus(s,t){ const e=$('syncStatus'); e.className='sync-status '+s; e.textContent=t; }
 function showLoading(t){ $('loadingText').textContent=t||'加载中…'; $('loadingOverlay').style.display='flex'; }
 function hideLoading(){ $('loadingOverlay').style.display='none'; }
 function getWeekStart(d){ const r=new Date(d); const day=r.getDay(); const diff=day===0?-6:1-day; r.setDate(r.getDate()+diff); r.setHours(0,0,0,0); return r; }
+
+// ========== 草稿缓存 ==========
+function saveDraft(key, data){ try{ localStorage.setItem('draft_'+key, JSON.stringify(data)); }catch(e){} }
+function loadDraft(key){ try{ const v=localStorage.getItem('draft_'+key); return v?JSON.parse(v):null; }catch(e){ return null; } }
+function clearDraft(key){ try{ localStorage.removeItem('draft_'+key); }catch(e){} }
+function attachDraftSaver(container, draftKey, fieldIds){
+  const save=()=>{
+    const data={};
+    fieldIds.forEach(id=>{
+      const el=container.querySelector('#'+id);
+      if(el) data[id]=el.value;
+    });
+    saveDraft(draftKey, data);
+  };
+  fieldIds.forEach(id=>{
+    const el=container.querySelector('#'+id);
+    if(el){ el.addEventListener('input', save); el.addEventListener('change', save); }
+  });
+}
+function restoreDraft(container, draftKey, fieldIds){
+  const draft=loadDraft(draftKey);
+  if(!draft) return false;
+  let restored=false;
+  fieldIds.forEach(id=>{
+    const el=container.querySelector('#'+id);
+    if(el && draft[id]!==undefined && draft[id]!==''){ el.value=draft[id]; restored=true; }
+  });
+  return restored;
+}
 
 // ========== 认证 ==========
 function showAuthMsg(msg, ok){ const el=$('authMsg'); el.className='auth-msg show '+(ok?'success':'error'); el.textContent=msg; }
@@ -447,7 +476,10 @@ async function handleLogout(){
 
 // ========== 数据加载 ==========
 async function loadAllData(){
-  showLoading('加载数据中…');
+  // 弹窗打开时不显示 loading 遮罩，避免打断编辑
+  const modalOpen = $('modalOverlay').classList.contains('show');
+  const focusOpen = $('focusOverlay').classList.contains('show');
+  if(!modalOpen && !focusOpen) showLoading('加载数据中…');
   try{
     const uid = currentUser.id;
     const results = await Promise.all([
@@ -501,7 +533,7 @@ async function loadAllData(){
     renderTasks(); renderCourses(); renderCalendar();
     setSyncStatus('synced','✅ 已同步');
 
-     // 静默记录版本号，不弹窗
+    // V1.2：静默记录版本号，不弹窗
     if(settings.last_seen_version !== APP_VERSION){
       settings.last_seen_version = APP_VERSION;
       syncSettingsToCloud();
@@ -510,7 +542,9 @@ async function loadAllData(){
     console.error('加载失败:',err);
     showToast('加载失败：'+err.message);
     setSyncStatus('error','❌ 同步失败');
-  }finally{ hideLoading(); }
+  }finally{
+    if(!modalOpen && !focusOpen) hideLoading();
+  }
 }
 function applySettingsToUI(){
   $('dayStartInput').value=settings.day_start;
@@ -523,39 +557,63 @@ function applySettingsToUI(){
   $('taskGapInput').value=settings.task_gap;
 }
 
-// ========== 云端同步 ==========
+// ========== 云端同步（带错误检查） ==========
 async function syncTaskToCloud(t, action='upsert'){
   if(!currentUser) return;
-  if(action==='delete'){ await sb.from('tasks').delete().eq('id',t.id); return; }
-  await sb.from('tasks').upsert({
-    id:t.id,user_id:currentUser.id,name:t.name,duration:t.duration,
-    priority:t.priority||'medium',deadline:t.deadline||null,
-    subtasks:t.subtasks||[],is_split:t.is_split||false
-  });
+  let result;
+  if(action==='delete'){
+    result = await sb.from('tasks').delete().eq('id',t.id);
+  } else {
+    result = await sb.from('tasks').upsert({
+      id:t.id,user_id:currentUser.id,name:t.name,duration:t.duration,
+      priority:t.priority||'medium',deadline:t.deadline||null,
+      subtasks:t.subtasks||[],is_split:t.is_split||false
+    });
+  }
+  if(result.error){
+    console.error('tasks 写入失败:', result.error);
+    showToast('⚠️ 任务保存失败：'+result.error.message);
+  }
 }
 async function syncCourseToCloud(c, action='upsert'){
   if(!currentUser) return;
-  if(action==='delete'){ await sb.from('courses').delete().eq('id',c.id); return; }
-  await sb.from('courses').upsert({
-    id:c.id,user_id:currentUser.id,name:c.name,day_of_week:c.dayOfWeek,
-    start_time:c.start+':00',end_time:c.end+':00',color:c.color
-  });
+  let result;
+  if(action==='delete'){
+    result = await sb.from('courses').delete().eq('id',c.id);
+  } else {
+    result = await sb.from('courses').upsert({
+      id:c.id,user_id:currentUser.id,name:c.name,day_of_week:c.dayOfWeek,
+      start_time:c.start+':00',end_time:c.end+':00',color:c.color
+    });
+  }
+  if(result.error){
+    console.error('courses 写入失败:', result.error);
+    showToast('⚠️ 课程保存失败：'+result.error.message);
+  }
 }
 async function syncEventToCloud(e, action='upsert'){
   if(!currentUser) return;
-  if(action==='delete'){ await sb.from('events').delete().eq('id',e.id); return; }
-  await sb.from('events').upsert({
-    id:e.id,user_id:currentUser.id,name:e.name,date:e.date,
-    start_time:e.start+':00',end_time:e.end+':00',
-    urgent:e.urgent||false,done:e.done||false,
-    priority:e.priority||'medium',color:e.color,
-    actual_start:e.actual_start||null,actual_end:e.actual_end||null,
-    focus_minutes:e.focus_minutes||0
-  });
+  let result;
+  if(action==='delete'){
+    result = await sb.from('events').delete().eq('id',e.id);
+  } else {
+    result = await sb.from('events').upsert({
+      id:e.id,user_id:currentUser.id,name:e.name,date:e.date,
+      start_time:e.start+':00',end_time:e.end+':00',
+      urgent:e.urgent||false,done:e.done||false,
+      priority:e.priority||'medium',color:e.color,
+      actual_start:e.actual_start||null,actual_end:e.actual_end||null,
+      focus_minutes:e.focus_minutes||0
+    });
+  }
+  if(result.error){
+    console.error('events 写入失败:', result.error);
+    showToast('⚠️ 日程保存失败：'+result.error.message);
+  }
 }
 async function syncSettingsToCloud(){
   if(!currentUser) return;
-  await sb.from('settings').upsert({
+  const result = await sb.from('settings').upsert({
     user_id:currentUser.id,
     day_start:settings.day_start+':00',day_end:settings.day_end+':00',
     meal_start:settings.meal_start+':00',meal_end:settings.meal_end+':00',
@@ -565,13 +623,20 @@ async function syncSettingsToCloud(){
     focus_total_minutes:settings.focus_total_minutes,
     focus_mountains:settings.focus_mountains
   });
+  if(result.error){
+    console.error('settings 写入失败:', result.error);
+    showToast('⚠️ 设置保存失败：'+result.error.message);
+  }
 }
 async function addFocusRecord(minutes, taskName){
   if(!currentUser) return;
   const today = dateKey(new Date());
-  await sb.from('focus_records').insert({
+  const result = await sb.from('focus_records').insert({
     user_id:currentUser.id, date:today, minutes:Math.round(minutes), task_name:taskName||''
   });
+  if(result.error){
+    console.error('focus_records 写入失败:', result.error);
+  }
   settings.focus_total_minutes = (settings.focus_total_minutes||0) + Math.round(minutes);
   await syncSettingsToCloud();
 }
@@ -589,7 +654,12 @@ let rtTimer=null;
 function handleRT(){
   setSyncStatus('syncing','🔄 同步中…');
   if(rtTimer) clearTimeout(rtTimer);
-  rtTimer=setTimeout(()=>loadAllData(),600);
+  rtTimer=setTimeout(()=>{
+    // 弹窗/专注模式打开时不重新加载，避免打断编辑
+    if($('modalOverlay').classList.contains('show')) return;
+    if($('focusOverlay').classList.contains('show')) return;
+    loadAllData();
+  },600);
 }
 
 // ========== 任务池渲染 ==========
@@ -703,17 +773,25 @@ function showDocModal(){
   const html = 
     '<h3>📖 说明文档 <button class="close" onclick="document.getElementById(\'modalOverlay\').classList.remove(\'show\')">✕</button></h3>'+
     '<span class="ver">当前版本 V'+APP_VERSION+'</span>'+
-    '<h4>🎉 V1.1 更新内容</h4>'+
+    '<h4>🔧 V1.2 修复内容</h4>'+
     '<ul>'+
-    '<li><b>任务动态延长</b>：任务做到一半发现时间不够，可以点击任务延长，后续任务自动顺延</li>'+
-    '<li><b>长线任务拆分</b>：添加任务时勾选"长线任务"，可以把它拆成多次完成</li>'+
-    '<li><b>专注模式</b>：双击日历上的任务进入专注模式，正向计时 + 爬山激励</li>'+
-    '<li><b>爬山激励</b>：累计专注 90 分钟登顶一座山，有动态风景和统计图表</li>'+
-    '<li><b>智能时间调整</b>：提前完成会有奖励提示；超时会自动顺延后续任务</li>'+
-    '<li><b>任务完成正反馈</b>：专注模式完成、或手动勾选，都算完成</li>'+
+    '<li><span class="fix-tag">修复</span> <b>编辑弹窗被顶掉</b>：之前编辑课程/任务超过一段时间，会被数据同步的加载遮罩盖住，看起来像弹窗被关闭。现在弹窗不会再被打断。</li>'+
+    '<li><span class="fix-tag">修复</span> <b>编辑中刷新丢进度</b>：现在弹窗打开时，你的输入会<b>自动草稿缓存</b>，刷新页面后会自动恢复未保存的内容，并提示"已恢复上次未保存的编辑"。</li>'+
+    '<li><span class="fix-tag">修复</span> <b>保存失败静默丢失</b>：之前写入云端失败时不会提示，数据丢失也无感知。现在保存失败会弹红色提示，告诉你具体原因。</li>'+
+    '<li><span class="fix-tag">优化</span> <b>token 刷新不重载</b>：登录凭证自动刷新时不再重新加载全部数据，减少无谓的打断。</li>'+
+    '<li><span class="fix-tag">优化</span> <b>说明文档不再主动弹出</b>：改为静默记录版本号，不再打扰使用。随时可通过侧边栏「📖 说明」按钮查看。</li>'+
+    '</ul>'+
+    '<h4>🎉 V1.1 功能回顾</h4>'+
+    '<ul>'+
+    '<li><b>任务动态延长</b>：点任务 → ⏱️ 延长时间，后续任务自动顺延</li>'+
+    '<li><b>长线任务拆分</b>：添加任务时勾选"长线任务"</li>'+
+    '<li><b>专注模式</b>：双击日历任务（需在开始时间 30 分钟内）进入</li>'+
+    '<li><b>爬山激励</b>：累计专注 90 分钟登顶一座山</li>'+
+    '<li><b>智能时间调整</b>：提前完成有奖励提示，超时自动顺延</li>'+
+    '<li><b>专注统计</b>：侧边栏「⛰️ 我的爬山记录」查看日/周柱状图</li>'+
     '</ul>'+
     '<h4>⚙️ 如何配置</h4>'+
-    '<p><b>1. 添加任务</b>：左侧"任务池"输入名称、时长、优先级、可选 deadline，点"添加到任务池"</p>'+
+    '<p><b>1. 添加任务</b>：左侧"任务池"输入名称、时长、优先级，点"添加到任务池"</p>'+
     '<p><b>2. 添加课程</b>：在日历空白处按住拖拽，创建每周固定课程</p>'+
     '<p><b>3. 智能排程</b>：点"✨ 智能排程"，把任务池里的任务排入未来 14 天空闲时间</p>'+
     '<p><b>4. 配置作息</b>：在"设置"里调整作息、用餐时间、任务间隔</p>'+
@@ -724,15 +802,14 @@ function showDocModal(){
     '<li><b>智能排程</b>：自动把任务填入空闲时间，跳过课程/用餐</li>'+
     '<li><b>实时同步</b>：手机电脑登录同一账号，数据秒级同步</li>'+
     '<li><b>专注模式</b>：双击任务进入，有爬山激励、暂停、动态时长调整</li>'+
+    '<li><b>草稿保护</b>：编辑中的内容自动缓存，意外刷新不丢失</li>'+
     '</ul>'+
     '<div class="modal-actions">'+
-    '<button class="btn btn-primary" id="docAckBtn">我知道了，开始使用</button></div>';
+    '<button class="btn btn-primary" id="docAckBtn">我知道了</button></div>';
   $('modalContent').innerHTML=html;
   $('modalContent').className='modal doc-modal';
   $('modalOverlay').classList.add('show');
-  $('docAckBtn').onclick=async()=>{
-    settings.last_seen_version = APP_VERSION;
-    await syncSettingsToCloud();
+  $('docAckBtn').onclick=()=>{
     $('modalOverlay').classList.remove('show');
   };
 }
@@ -866,7 +943,7 @@ function setupDragCreate(){
   });
 }
 
-// ========== 创建弹窗 ==========
+// ========== 创建弹窗（带草稿缓存） ==========
 function openCreateModal(date,start,end,durMin){
   const dd=parseDate(date); const dw=dd.getDay();
   const conflictHard=courses.some(c=>c.dayOfWeek===dw&&toMin(start)<toMin(c.end)&&toMin(end)>toMin(c.start))||
@@ -877,7 +954,7 @@ function openCreateModal(date,start,end,durMin){
   else if(conflictEvents.length>0) warnHtml='<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:0.7rem;padding:0.6rem 0.8rem;font-size:0.78rem;color:#1e40af;margin-bottom:0.7rem;">ℹ️ 与 '+conflictEvents.length+' 个任务重叠。选"⚡ 突发事件"会挤占并顺延。</div>';
   const colorChoices=COLOR_POOL.map((c,i)=>'<div class="color-swatch" data-ci="'+i+'" style="background:'+c.bg+';border-color:'+c.border+';"></div>').join('');
   $('modalContent').innerHTML=
-    '<h3>➕ 创建 <button class="close" onclick="document.getElementById(\'modalOverlay\').classList.remove(\'show\')">✕</button></h3>'+
+    '<h3>➕ 创建 <button class="close" id="mCloseBtn">✕</button></h3>'+
     warnHtml+
     '<div class="field"><label>类型</label><select class="input" id="mType">'+
     '<option value="task">📌 任务（避开已有）</option>'+
@@ -890,11 +967,20 @@ function openCreateModal(date,start,end,durMin){
     '<input class="input" id="mEnd" type="time" value="'+end+'"></div>'+
     '<div style="font-size:0.72rem;color:#64748b;margin-top:0.25rem;">时长：<b id="mDurLabel">'+fmtDur(durMin)+'</b></div></div>'+
     '<div class="field" id="mColorField"><label>颜色</label><div class="color-picker" id="mColorPicker">'+colorChoices+'</div></div>'+
-    '<div class="modal-actions"><button class="btn btn-outline" onclick="document.getElementById(\'modalOverlay\').classList.remove(\'show\')">取消</button>'+
+    '<div class="modal-actions"><button class="btn btn-outline" id="mCancelBtn">取消</button>'+
     '<button class="btn btn-primary" id="mSave">保存</button></div>';
   $('modalContent').className='modal';
   $('modalOverlay').classList.add('show');
   $('mName').focus();
+
+  // 草稿缓存
+  const draftKey='create_'+date+'_'+start+'_'+end;
+  const fieldIds=['mName','mDate','mStart','mEnd','mType'];
+  if(restoreDraft($('modalContent'), draftKey, fieldIds)){
+    showToast('已恢复上次未保存的编辑');
+  }
+  attachDraftSaver($('modalContent'), draftKey, fieldIds);
+
   const updateFields=()=>{ const t=$('mType').value; $('mDateField').style.display=t==='course'?'none':'block'; $('mColorField').style.display=t==='urgent'?'none':'block'; };
   $('mType').onchange=updateFields; updateFields();
   $('mStart').onchange=$('mEnd').onchange=()=>{
@@ -905,6 +991,10 @@ function openCreateModal(date,start,end,durMin){
   const sws=$('modalContent').querySelectorAll('.color-swatch');
   const upd=()=>sws.forEach((sw,i)=>sw.classList.toggle('selected',i===selCI));
   sws.forEach((sw,i)=>sw.onclick=()=>{selCI=i;upd();}); upd();
+
+  const closeModal=()=>{ clearDraft(draftKey); $('modalOverlay').classList.remove('show'); };
+  $('mCloseBtn').onclick=closeModal;
+  $('mCancelBtn').onclick=closeModal;
 
   $('mSave').onclick=async()=>{
     const name=$('mName').value.trim(), type=$('mType').value, s=$('mStart').value, e=$('mEnd').value;
@@ -944,6 +1034,7 @@ function openCreateModal(date,start,end,durMin){
       events.push(ne); await syncEventToCloud(ne);
       showToast('已创建');
     }
+    clearDraft(draftKey);
     $('modalOverlay').classList.remove('show');
     renderCourses(); renderCalendar(); renderTasks();
   };
@@ -999,13 +1090,13 @@ async function makeRoom(dk, iStart, iEnd){
   return {success:true,movedCount:shifted.length,truncatedCount:truncated.length};
 }
 
-// ========== 事件弹窗（含延长、拆分、专注） ==========
+// ========== 编辑事件弹窗（带草稿缓存） ==========
 function openEventModal(eventId){
   const ev=events.find(e=>e.id===eventId);
   if(!ev) return;
   const canFocus = canEnterFocus(ev);
   $('modalContent').innerHTML=
-    '<h3>📝 '+(ev.urgent?'⚡突发事件':'任务详情')+' <button class="close" onclick="document.getElementById(\'modalOverlay\').classList.remove(\'show\')">✕</button></h3>'+
+    '<h3>📝 '+(ev.urgent?'⚡突发事件':'任务详情')+' <button class="close" id="mEvCloseBtn">✕</button></h3>'+
     '<div class="field"><label>名称</label><input class="input" id="mEvName" value="'+escapeHtml(ev.name)+'"></div>'+
     '<div class="field"><label>日期</label><input class="input" id="mEvDate" type="date" value="'+ev.date+'"></div>'+
     '<div class="field"><label>时间段</label><div class="input-row">'+
@@ -1028,10 +1119,22 @@ function openEventModal(eventId){
     (ev.done?'':'<button class="btn btn-primary btn-sm" id="mEvComplete">✓ 标记完成</button>')+
     '</div>'+
     '<div class="modal-actions"><button class="btn btn-danger" id="mEvDelete">删除</button>'+
-    '<button class="btn btn-outline" onclick="document.getElementById(\'modalOverlay\').classList.remove(\'show\')">取消</button>'+
+    '<button class="btn btn-outline" id="mEvCancel">取消</button>'+
     '<button class="btn btn-primary" id="mEvSave">保存</button></div>';
   $('modalContent').className='modal';
   $('modalOverlay').classList.add('show');
+
+  // 草稿缓存
+  const draftKey='edit_'+eventId;
+  const fieldIds=['mEvName','mEvDate','mEvStart','mEvEnd','mEvPriority','mEvDone','mEvUrgent'];
+  if(restoreDraft($('modalContent'), draftKey, fieldIds)){
+    showToast('已恢复上次未保存的编辑');
+  }
+  attachDraftSaver($('modalContent'), draftKey, fieldIds);
+
+  const closeModal=()=>{ clearDraft(draftKey); $('modalOverlay').classList.remove('show'); };
+  $('mEvCloseBtn').onclick=closeModal;
+  $('mEvCancel').onclick=closeModal;
 
   $('mEvSave').onclick=async()=>{
     ev.name=$('mEvName').value.trim();
@@ -1045,6 +1148,7 @@ function openEventModal(eventId){
     if(!ev.name||toMin(ev.start)>=toMin(ev.end)){ alert('输入有误'); return; }
     ev.duration=toMin(ev.end)-toMin(ev.start);
     await syncEventToCloud(ev);
+    clearDraft(draftKey);
     $('modalOverlay').classList.remove('show');
     renderCalendar(); showToast('已保存');
   };
@@ -1052,24 +1156,29 @@ function openEventModal(eventId){
     if(!confirm('确定删除吗？')) return;
     events=events.filter(e=>e.id!==ev.id);
     await syncEventToCloud({id:ev.id},'delete');
+    clearDraft(draftKey);
     $('modalOverlay').classList.remove('show');
     renderCalendar(); showToast('已删除');
   };
   if($('mEvComplete')) $('mEvComplete').onclick=async()=>{
     ev.done=true;
     await syncEventToCloud(ev);
+    clearDraft(draftKey);
     $('modalOverlay').classList.remove('show');
     renderCalendar(); showToast('🎉 任务已完成！');
   };
   if($('mEvFocus')) $('mEvFocus').onclick=()=>{
+    clearDraft(draftKey);
     $('modalOverlay').classList.remove('show');
     startFocusMode(ev);
   };
   $('mEvExtend').onclick=()=>{
+    clearDraft(draftKey);
     $('modalOverlay').classList.remove('show');
     openExtendModal(ev);
   };
   $('mEvDelayed').onclick=()=>{
+    clearDraft(draftKey);
     $('modalOverlay').classList.remove('show');
     openDelayedModal(ev);
   };
@@ -1091,15 +1200,12 @@ function openExtendModal(ev){
     if(!min||min<5){ alert('请输入至少 5 分钟'); return; }
     const oldEnd=toMin(ev.end);
     const newEnd=oldEnd+min;
-    // 检查是否与课程/用餐冲突
     const dd=parseDate(ev.date); const dw=dd.getDay();
     const hc=courses.some(c=>c.dayOfWeek===dw&&oldEnd<toMin(c.end)&&newEnd>toMin(c.start))||
       getMealBlocks().some(m=>oldEnd<toMin(m.end)&&newEnd>toMin(m.start));
     if(hc){ alert('延长后会与课程/用餐冲突，请调整'); return; }
-    // 先把该事件时间改好
     ev.end=toTime(newEnd);
     ev.duration=toMin(ev.end)-toMin(ev.start);
-    // 顺延后续
     await shiftSubsequent(ev.date, ev.id, newEnd, min);
     await syncEventToCloud(ev);
     $('modalOverlay').classList.remove('show');
@@ -1108,7 +1214,6 @@ function openExtendModal(ev){
   };
 }
 
-// 顺延指定事件之后的所有任务
 async function shiftSubsequent(dk, anchorId, newAnchorEnd, extraMinutes){
   const dd=parseDate(dk); const dw=dd.getDay();
   const hardItems=[];
@@ -1142,7 +1247,7 @@ function openDelayedModal(ev){
   const curTime=pad(now.getHours())+':'+pad(now.getMinutes());
   $('modalContent').innerHTML=
     '<h3>📅 延后开始 <button class="close" onclick="document.getElementById(\'modalOverlay\').classList.remove(\'show\')">✕</button></h3>'+
-    '<div style="font-size:0.85rem;color:#64748b;margin-bottom:1rem;">任务「'+escapeHtml(ev.name)+'」原定 '+ev.start+' 开始。如果错过了，可以把任务整体往后挪。</div>'+
+    '<div style="font-size:0.85rem;color:#64748b;margin-bottom:1rem;">任务「'+escapeHtml(ev.name)+'」原定 '+ev.start+' 开始。</div>'+
     '<div class="field"><label>新的开始时间</label><input class="input" id="mDlyStart" type="time" value="'+curTime+'"></div>'+
     '<div class="field"><label>保持时长</label><div style="font-size:0.82rem;color:#1e293b;padding:0.4rem 0;">'+fmtDur(toMin(ev.end)-toMin(ev.start))+'</div></div>'+
     '<div class="modal-actions"><button class="btn btn-outline" onclick="document.getElementById(\'modalOverlay\').classList.remove(\'show\')">取消</button>'+
@@ -1154,9 +1259,7 @@ function openDelayedModal(ev){
     const dur=toMin(ev.end)-toMin(ev.start);
     const ne=ns+dur;
     if(ne>toMin(settings.day_end)){ alert('延后后会超出当天作息'); return; }
-    const delta=ns-toMin(ev.start);
     ev.start=toTime(ns); ev.end=toTime(ne);
-    // 顺延后续
     const dd=parseDate(ev.date); const dw=dd.getDay();
     const hardItems=[];
     courses.filter(c=>c.dayOfWeek===dw).forEach(c=>hardItems.push({start:toMin(c.start),end:toMin(c.end),name:c.name}));
@@ -1213,9 +1316,7 @@ let focusPausedAt = null;
 let pauseRemain = 0;
 
 function startFocusMode(ev){
-  // 关闭其他弹窗
   $('modalOverlay').classList.remove('show');
-  // 初始化
   focusState = {
     eventId: ev.id,
     event: ev,
@@ -1232,11 +1333,8 @@ function startFocusMode(ev){
   $('focusSubInfo').textContent = '计划 '+fmtDur(focusState.plannedMin);
   $('focusOverlay').classList.add('show');
 
-  // 更新累计显示
   updateFocusBottom();
-  // 启动计时
   startFocusTimer();
-  // 启动动画
   startMountainAnimation();
 }
 
@@ -1261,7 +1359,6 @@ function startFocusTimer(){
   focusAnimationId = requestAnimationFrame(tick);
 }
 
-// ========== 爬山动画 ==========
 let mtAnimState = null;
 function startMountainAnimation(){
   const canvas = $('focusCanvas');
@@ -1269,10 +1366,8 @@ function startMountainAnimation(){
   const W = canvas.width, H = canvas.height;
   const baseY = H - 40;
   const peakY = 60;
-  // 随机山形
   const seed = Math.random();
   const peakX = W/2 + (seed-0.5)*100;
-  // 随机风景主题
   const themes = [
     {sky1:'#87ceeb',sky2:'#e0f2fe',mtn:'#64748b',mtn2:'#94a3b8',tree:'#16a34a'},
     {sky1:'#fcd34d',sky2:'#fef3c7',mtn:'#92400e',mtn2:'#b45309',tree:'#65a30d'},
@@ -1297,20 +1392,17 @@ function drawMountain(){
   if(!s || !focusState || focusState.ended) return;
   const {canvas,ctx,W,H,baseY,peakY,peakX,theme,clouds,trees} = s;
 
-  // 天空渐变
   const grad = ctx.createLinearGradient(0,0,0,H);
   grad.addColorStop(0, theme.sky1);
   grad.addColorStop(1, theme.sky2);
   ctx.fillStyle = grad;
   ctx.fillRect(0,0,W,H);
 
-  // 太阳
   ctx.beginPath();
   ctx.arc(W-100, 80, 40, 0, Math.PI*2);
   ctx.fillStyle = 'rgba(255,255,200,0.6)';
   ctx.fill();
 
-  // 云
   clouds.forEach(c=>{
     c.x += c.s;
     if(c.x > W+c.r) c.x = -c.r;
@@ -1322,7 +1414,6 @@ function drawMountain(){
     ctx.fill();
   });
 
-  // 远山
   ctx.beginPath();
   ctx.moveTo(0, baseY);
   ctx.lineTo(W*0.25, peakY+40);
@@ -1335,7 +1426,6 @@ function drawMountain(){
   ctx.fill();
   ctx.globalAlpha = 1;
 
-  // 主山
   ctx.beginPath();
   ctx.moveTo(0, baseY);
   ctx.quadraticCurveTo(peakX*0.5, peakY+30, peakX, peakY);
@@ -1346,7 +1436,6 @@ function drawMountain(){
   ctx.fillStyle = theme.mtn;
   ctx.fill();
 
-  // 山顶积雪
   ctx.beginPath();
   ctx.moveTo(peakX-40, peakY+35);
   ctx.quadraticCurveTo(peakX, peakY-5, peakX+40, peakY+35);
@@ -1354,7 +1443,6 @@ function drawMountain(){
   ctx.fillStyle = 'rgba(255,255,255,0.9)';
   ctx.fill();
 
-  // 树
   trees.forEach(t=>{
     if(t.x < 50 || t.x > W-50) return;
     const y = baseY - Math.abs(t.x - peakX) * 0.3;
@@ -1368,11 +1456,9 @@ function drawMountain(){
     ctx.fillRect(t.x-2, y+50*t.s, 4, 8*t.s);
   });
 
-  // 计算小人位置
   const totalMin = (settings.focus_total_minutes||0);
   const prog = (totalMin % 90) / 90;
   const curX = prog * W;
-  // 用山的曲线计算高度
   let curY;
   if(curX < peakX){
     const t = curX / peakX;
@@ -1381,11 +1467,8 @@ function drawMountain(){
     const t = (curX - peakX) / (W - peakX);
     curY = peakY + (baseY - peakY) * (1 - Math.cos(t * Math.PI/2));
   }
-  // 小人在山路上
-  // 画小人
   drawHiker(ctx, curX, curY, focusState.paused);
 
-  // 在山脚画进度条
   ctx.fillStyle = 'rgba(255,255,255,0.6)';
   ctx.fillRect(20, H-25, W-40, 10);
   ctx.fillStyle = '#3b82f6';
@@ -1394,35 +1477,29 @@ function drawMountain(){
   ctx.font = 'bold 12px system-ui';
   ctx.fillText('当前山进度: ' + Math.round(prog*100) + '%', 20, H-32);
 
-  // 下一帧
   s.lastFrame = Date.now();
   requestAnimationFrame(drawMountain);
 }
 
 function drawHiker(ctx, x, y, paused){
-  // 身体
   ctx.fillStyle = paused ? '#94a3b8' : '#ef4444';
   ctx.beginPath();
   ctx.arc(x, y-8, 6, 0, Math.PI*2);
   ctx.fill();
-  // 头
   ctx.fillStyle = paused ? '#cbd5e1' : '#fcd34d';
   ctx.beginPath();
   ctx.arc(x, y-20, 5, 0, Math.PI*2);
   ctx.fill();
-  // 手臂
   ctx.strokeStyle = paused ? '#94a3b8' : '#ef4444';
   ctx.lineWidth = 3;
   ctx.beginPath();
   ctx.moveTo(x-6, y-10); ctx.lineTo(x-12, y-18);
   ctx.moveTo(x+6, y-10); ctx.lineTo(x+12, y-18);
   ctx.stroke();
-  // 腿
   ctx.beginPath();
   ctx.moveTo(x-4, y-4); ctx.lineTo(x-8, y+8);
   ctx.moveTo(x+4, y-4); ctx.lineTo(x+8, y+8);
   ctx.stroke();
-  // 登山杖
   ctx.strokeStyle = paused ? '#cbd5e1' : '#78350f';
   ctx.beginPath();
   ctx.moveTo(x+12, y-14); ctx.lineTo(x+18, y+10);
@@ -1447,11 +1524,9 @@ function updateFocusBottom(){
   $('focusProgressPct').textContent = Math.round((total%90)/90*100)+'%';
 }
 
-// ========== 专注模式按钮 ==========
 $('focusPauseBtn').onclick = () => {
   if(!focusState || focusState.ended) return;
   if(focusState.paused){
-    // 继续
     focusPausedTotal += Date.now() - focusPausedAt;
     focusState.paused = false;
     focusPausedAt = null;
@@ -1459,18 +1534,15 @@ $('focusPauseBtn').onclick = () => {
     $('focusPauseBtn').textContent = '⏸ 暂停';
     showToast('继续专注');
   } else {
-    // 暂停
     focusState.paused = true;
     focusPausedAt = Date.now();
-    pauseRemain = 180; // 3 分钟
+    pauseRemain = 180;
     $('focusPauseBtn').textContent = '▶ 继续';
-    // 倒计时
     const cnt = setInterval(()=>{
       if(!focusState || !focusState.paused){ clearInterval(cnt); return; }
       pauseRemain -= 1;
       if(pauseRemain <= 0){
         clearInterval(cnt);
-        // 自动恢复
         focusPausedTotal += Date.now() - focusPausedAt;
         focusState.paused = false;
         focusPausedAt = null;
@@ -1492,23 +1564,18 @@ $('focusFinishBtn').onclick = async () => {
 
   stopMountainAnimation();
 
-  // 保存专注记录
   await addFocusRecord(actualMin, ev.name);
-  // 更新累计登山数
   const newTotal = settings.focus_total_minutes||0;
   settings.focus_mountains = Math.floor(newTotal / 90);
   await syncSettingsToCloud();
 
-  // 标记完成
   ev.done = true;
   ev.actual_start = focusState.startedAt.toISOString();
   ev.actual_end = now.toISOString();
   ev.focus_minutes = (ev.focus_minutes||0) + actualMin;
   await syncEventToCloud(ev);
 
-  // 处理后续任务
   if(diff > 0){
-    // 超时
     const oldEnd = toMin(ev.end);
     const newEnd = oldEnd + diff;
     ev.end = toTime(newEnd);
@@ -1535,7 +1602,6 @@ $('focusQuitBtn').onclick = () => {
 
 // ========== 爬山统计 ==========
 async function showStats(){
-  // 重新拉取最新记录
   const { data } = await sb.from('focus_records').select('*').order('date');
   focusRecords = data||[];
   const totalMin = focusRecords.reduce((s,r)=>s+r.minutes, 0);
@@ -1547,7 +1613,6 @@ async function showStats(){
   $('statMtn').textContent = totalMtn;
   $('statStreak').textContent = todayMin;
 
-  // 近 7 天
   const weekData = [];
   for(let i=6;i>=0;i--){
     const d = addDays(new Date(), -i);
@@ -1557,7 +1622,6 @@ async function showStats(){
   }
   renderBars($('chartWeek'), weekData);
 
-  // 近 4 周
   const monthData = [];
   for(let w=3;w>=0;w--){
     let sum = 0;
@@ -1581,12 +1645,12 @@ function renderBars(container, data){
   }).join('');
 }
 
-// ========== 课程弹窗 ==========
+// ========== 课程弹窗（带草稿缓存） ==========
 function openCourseModal(courseId){
   const c=courses.find(x=>x.id===courseId);
   if(!c) return;
   $('modalContent').innerHTML=
-    '<h3>📚 编辑课程 <button class="close" onclick="document.getElementById(\'modalOverlay\').classList.remove(\'show\')">✕</button></h3>'+
+    '<h3>📚 编辑课程 <button class="close" id="mCCloseBtn">✕</button></h3>'+
     '<div class="field"><label>课程名</label><input class="input" id="mCName" value="'+escapeHtml(c.name)+'"></div>'+
     '<div class="field"><label>星期</label><select class="input" id="mCDay">'+
     [1,2,3,4,5,6,0].map(d=>'<option value="'+d+'" '+(c.dayOfWeek===d?'selected':'')+'>'+DOW_NAMES[d]+'</option>').join('')+
@@ -1596,10 +1660,23 @@ function openCourseModal(courseId){
     '<span style="color:#64748b;">—</span>'+
     '<input class="input" id="mCEnd" type="time" value="'+c.end+'"></div></div>'+
     '<div class="modal-actions"><button class="btn btn-danger" id="mCDelete">删除</button>'+
-    '<button class="btn btn-outline" onclick="document.getElementById(\'modalOverlay\').classList.remove(\'show\')">取消</button>'+
+    '<button class="btn btn-outline" id="mCCancel">取消</button>'+
     '<button class="btn btn-primary" id="mCSave">保存</button></div>';
   $('modalContent').className='modal';
   $('modalOverlay').classList.add('show');
+
+  // 草稿缓存
+  const draftKey='course_'+courseId;
+  const fieldIds=['mCName','mCDay','mCStart','mCEnd'];
+  if(restoreDraft($('modalContent'), draftKey, fieldIds)){
+    showToast('已恢复上次未保存的编辑');
+  }
+  attachDraftSaver($('modalContent'), draftKey, fieldIds);
+
+  const closeModal=()=>{ clearDraft(draftKey); $('modalOverlay').classList.remove('show'); };
+  $('mCCloseBtn').onclick=closeModal;
+  $('mCCancel').onclick=closeModal;
+
   $('mCSave').onclick=async()=>{
     c.name=$('mCName').value.trim();
     c.dayOfWeek=Number($('mCDay').value);
@@ -1607,6 +1684,7 @@ function openCourseModal(courseId){
     c.end=$('mCEnd').value;
     if(!c.name||toMin(c.start)>=toMin(c.end)){ alert('输入有误'); return; }
     await syncCourseToCloud(c);
+    clearDraft(draftKey);
     $('modalOverlay').classList.remove('show');
     renderCourses(); renderCalendar();
     showToast('已保存');
@@ -1615,6 +1693,7 @@ function openCourseModal(courseId){
     if(!confirm('删除这门课程？')) return;
     courses=courses.filter(x=>x.id!==c.id);
     await syncCourseToCloud({id:c.id},'delete');
+    clearDraft(draftKey);
     $('modalOverlay').classList.remove('show');
     renderCourses(); renderCalendar();
     showToast('已删除');
@@ -1742,6 +1821,29 @@ function bind(){
   $('statsBtn').onclick=showStats;
   $('statsCloseBtn').onclick=()=>$('statsOverlay').classList.remove('show');
 
+  // 任务池输入框草稿缓存
+  const poolFields=['taskNameInput','taskDurInput','taskPriorityInput','taskDeadlineInput'];
+  const poolDraftKey='task_pool';
+  const poolDraft=loadDraft(poolDraftKey);
+  if(poolDraft){
+    poolFields.forEach(id=>{
+      const el=$(id);
+      if(el && poolDraft[id]!==undefined) el.value=poolDraft[id];
+    });
+  }
+  poolFields.forEach(id=>{
+    const el=$(id);
+    if(el){
+      const savePool=()=>{
+        const data={};
+        poolFields.forEach(f=>{ const e=$(f); if(e) data[f]=e.value; });
+        saveDraft(poolDraftKey, data);
+      };
+      el.addEventListener('input', savePool);
+      el.addEventListener('change', savePool);
+    }
+  });
+
   $('addTaskBtn').onclick=async()=>{
     const name=$('taskNameInput').value.trim();
     const dur=Number($('taskDurInput').value);
@@ -1757,6 +1859,7 @@ function bind(){
     $('taskDurInput').value='';
     $('taskDeadlineInput').value='';
     $('taskSplitCheck').checked=false;
+    clearDraft(poolDraftKey);
     $('taskNameInput').focus();
     renderTasks();
     showToast('已加入任务池');
@@ -1794,13 +1897,14 @@ function bind(){
     await syncSettingsToCloud();
     showToast('任务间隔已设为 '+settings.task_gap+' 分钟');
   };
-  $('modalOverlay').onclick=e=>{ if(e.target===$('modalOverlay')) $('modalOverlay').classList.remove('show'); };
-  window.addEventListener('beforeunload',()=>{});
+  $('modalOverlay').onclick=e=>{ if(e.target===$('modalOverlay')) { /* 不自动关闭，避免误触 */ } };
 }
 
-// ========== 认证监听 ==========
+// ========== 认证监听（V1.2：token 刷新不重载） ==========
 sb.auth.onAuthStateChange(async (event,session)=>{
-  if(session&&session.user){
+  if(event === 'TOKEN_REFRESHED') return;
+  if(session && session.user){
+    if(currentUser && currentUser.id === session.user.id) return;
     currentUser=session.user;
     $('userEmail').textContent=session.user.email;
     $('authPage').style.display='none';
