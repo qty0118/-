@@ -789,6 +789,7 @@ function showDocModal(){
     '<h4>🆕 V1.3 更新内容</h4>'+
     '<ul>'+
     '<li><span class="new-tag">新增</span> <b>午休时间</b>：设置里可以配置午休时间段（默认 13:00–14:00），日历上显示为紫色块，智能排程会自动跳过午休时间。</li>'+
+    '<li><span class="fix-tag">修复</span> <b>延长时间后任务重叠</b>：修复了延长时间/延后开始时，后续任务可能显示重叠的 bug，现在会正确依次顺延，并跳过课程/用餐/午休。</li>'+
     '</ul>'+
     '<h4>🔧 V1.2 修复内容</h4>'+
     '<ul>'+
@@ -1058,53 +1059,71 @@ function openCreateModal(date,start,end,durMin){
   };
 }
 
-// ========== 突发事件挤占 ==========
+// ========== 突发事件挤占 + 顺延（已修复） ==========
 async function makeRoom(dk, iStart, iEnd){
   const dd=parseDate(dk); const dw=dd.getDay();
   const hardItems=[];
   courses.filter(c=>c.dayOfWeek===dw).forEach(c=>hardItems.push({start:toMin(c.start),end:toMin(c.end),name:c.name}));
   getMealBlocks().forEach(m=>hardItems.push({start:toMin(m.start),end:toMin(m.end),name:m.name}));
+
+  // 新块与硬块冲突检查
   for(const h of hardItems){
     if(iStart<h.end && iEnd>h.start) return {success:false,reason:'与「'+h.name+'」冲突'};
   }
-  const movable=events.filter(e=>e.date===dk).sort((a,b)=>toMin(a.start)-toMin(b.start));
+
+  // 找出需要顺延的任务（未完成的）
+  const movable=events.filter(e=>e.date===dk && !e.done);
   const toShift=movable.filter(e=>{
     const s=toMin(e.start),en=toMin(e.end);
     return (s<iEnd&&en>iStart)||(s>=iStart&&s<iEnd);
   }).sort((a,b)=>toMin(a.start)-toMin(b.start));
+
   if(toShift.length===0) return {success:true,movedCount:0,truncatedCount:0};
-  let cursor=iEnd;
+
   const shifted=[], truncated=[];
   const de=toMin(settings.day_end), gap=settings.task_gap||0;
+  let cursor=iEnd;
+
   for(const ev of toShift){
     const dur=toMin(ev.end)-toMin(ev.start);
-    let ns=cursor, ne=ns+dur;
+    let ns=cursor;
+    let ne=ns+dur;
     let guard=0;
-    while(guard++<50){
-      const ch=hardItems.find(h=>ns<h.end&&ne>h.start);
-      if(!ch) break;
-      ns=ch.end; ne=ns+dur;
+    while(guard++<100){
+      const conflictHard = hardItems.find(h=>ns<h.end && ne>h.start);
+      if(!conflictHard) break;
+      ns=conflictHard.end;
+      ne=ns+dur;
     }
     if(ne>de){ truncated.push(ev); continue; }
     shifted.push({id:ev.id,ns,ne});
     cursor=ne+gap;
   }
-  const proms=shifted.map(sh=>{
+
+  // 应用变更到内存
+  for(const sh of shifted){
     const ev=events.find(e=>e.id===sh.id);
-    if(!ev) return Promise.resolve();
-    ev.start=toTime(sh.ns); ev.end=toTime(sh.ne);
-    return syncEventToCloud(ev);
-  });
+    if(ev){ ev.start=toTime(sh.ns); ev.end=toTime(sh.ne); }
+  }
+  // 把放不下的放回任务池
   for(const tr of truncated){
     const ev=events.find(e=>e.id===tr.id);
     if(ev){
       const nt={id:uid(),name:ev.name,duration:toMin(ev.end)-toMin(ev.start),priority:ev.priority||'medium',deadline:null,subtasks:[],is_split:false};
-      tasks.push(nt); events=events.filter(e=>e.id!==ev.id);
+      tasks.push(nt);
+      events=events.filter(e=>e.id!==ev.id);
       await syncEventToCloud({id:ev.id},'delete');
       await syncTaskToCloud(nt);
     }
   }
+  // 批量同步到云端
+  const proms=shifted.map(sh=>{
+    const ev=events.find(e=>e.id===sh.id);
+    if(!ev) return Promise.resolve();
+    return syncEventToCloud(ev);
+  });
   await Promise.all(proms);
+
   return {success:true,movedCount:shifted.length,truncatedCount:truncated.length};
 }
 
@@ -1223,42 +1242,73 @@ function openExtendModal(ev){
     if(hc){ alert('延长后会与课程/用餐/午休冲突，请调整'); return; }
     ev.end=toTime(newEnd);
     ev.duration=toMin(ev.end)-toMin(ev.start);
-    await shiftSubsequent(ev.date, ev.id, newEnd, min);
     await syncEventToCloud(ev);
+    await shiftSubsequent(ev.date, ev.id, newEnd, min);
     $('modalOverlay').classList.remove('show');
     renderCalendar();
     showToast('✅ 已延长 '+min+' 分钟，后续任务顺延');
   };
 }
 
+// ========== 顺延后续任务（已修复） ==========
 async function shiftSubsequent(dk, anchorId, newAnchorEnd, extraMinutes){
   const dd=parseDate(dk); const dw=dd.getDay();
+  // 硬块：课程 + 用餐 + 午休
   const hardItems=[];
   courses.filter(c=>c.dayOfWeek===dw).forEach(c=>hardItems.push({start:toMin(c.start),end:toMin(c.end),name:c.name}));
   getMealBlocks().forEach(m=>hardItems.push({start:toMin(m.start),end:toMin(m.end),name:m.name}));
-  const anchorStart=toMin((events.find(e=>e.id===anchorId)||{}).start||0);
-  const subsequent=events.filter(e=>e.date===dk && e.id!==anchorId && toMin(e.start)>=anchorStart+1)
-    .sort((a,b)=>toMin(a.start)-toMin(b.start));
-  const proms=[];
-  let cursor=newAnchorEnd + (settings.task_gap||0);
+
+  const anchorStart = toMin((events.find(e=>e.id===anchorId)||{}).start || 0);
+
+  // 找出锚定任务之后、未完成的任务
+  const subsequent = events.filter(e =>
+    e.date === dk &&
+    e.id !== anchorId &&
+    !e.done &&                                  // 已完成的不动
+    toMin(e.start) > anchorStart                // 严格大于，避免误伤同开始的
+  ).sort((a,b)=>toMin(a.start)-toMin(b.start));
+
+  if(subsequent.length === 0) return;
+
+  const gap = settings.task_gap || 0;
+  const dayEnd = toMin(settings.day_end);
+  const proms = [];
+  let cursor = newAnchorEnd + gap;
+
   for(const ev of subsequent){
-    const dur=toMin(ev.end)-toMin(ev.start);
-    let ns=cursor, ne=ns+dur;
-    let guard=0;
-    while(guard++<50){
-      const ch=hardItems.find(h=>ns<h.end&&ne>h.start);
-      if(!ch) break;
-      ns=ch.end; ne=ns+dur;
+    const dur = toMin(ev.end) - toMin(ev.start);
+
+    // 从 cursor 开始找第一个不与硬块冲突的位置
+    let ns = cursor;
+    let guard = 0;
+    while(guard++ < 100){
+      const conflict = hardItems.find(h => ns < h.end && (ns + dur) > h.start);
+      if(!conflict) break;
+      ns = conflict.end;
     }
-    if(ne>toMin(settings.day_end)) break;
-    ev.start=toTime(ns); ev.end=toTime(ne);
+    const ne = ns + dur;
+
+    // 超出当天作息 → 停止顺延，但任务保留在原位
+    if(ne > dayEnd) break;
+
+    // 只往前挪，不往回拉
+    const oldStart = toMin(ev.start);
+    if(ns <= oldStart){
+      // 不需要移动，cursor 推进到该任务结束 + 间隔
+      cursor = Math.max(cursor, toMin(ev.end) + gap);
+      continue;
+    }
+
+    ev.start = toTime(ns);
+    ev.end = toTime(ne);
     proms.push(syncEventToCloud(ev));
-    cursor=ne+(settings.task_gap||0);
+    cursor = ne + gap;
   }
+
   await Promise.all(proms);
 }
 
-// ========== 延后开始 ==========
+// ========== 延后开始（已修复） ==========
 function openDelayedModal(ev){
   const now=new Date();
   const curTime=pad(now.getHours())+':'+pad(now.getMinutes());
@@ -1276,29 +1326,57 @@ function openDelayedModal(ev){
     const dur=toMin(ev.end)-toMin(ev.start);
     const ne=ns+dur;
     if(ne>toMin(settings.day_end)){ alert('延后后会超出当天作息'); return; }
-    ev.start=toTime(ns); ev.end=toTime(ne);
+
     const dd=parseDate(ev.date); const dw=dd.getDay();
     const hardItems=[];
     courses.filter(c=>c.dayOfWeek===dw).forEach(c=>hardItems.push({start:toMin(c.start),end:toMin(c.end),name:c.name}));
     getMealBlocks().forEach(m=>hardItems.push({start:toMin(m.start),end:toMin(m.end),name:m.name}));
-    const subsequent=events.filter(e=>e.date===ev.date && e.id!==ev.id && toMin(e.start)>=ns && toMin(e.start)<ne+dur)
-      .sort((a,b)=>toMin(a.start)-toMin(b.start));
-    let cursor=ne+(settings.task_gap||0);
-    for(const sub of subsequent){
-      const d=toMin(sub.end)-toMin(sub.start);
-      let ns2=cursor, ne2=ns2+d;
-      let g=0;
-      while(g++<50){
-        const ch=hardItems.find(h=>ns2<h.end&&ne2>h.start);
-        if(!ch) break;
-        ns2=ch.end; ne2=ns2+d;
-      }
-      if(ne2>toMin(settings.day_end)) break;
-      sub.start=toTime(ns2); sub.end=toTime(ne2);
-      await syncEventToCloud(sub);
-      cursor=ne2+(settings.task_gap||0);
+
+    // 检查新位置是否与硬块冲突
+    for(const h of hardItems){
+      if(ns<h.end && ne>h.start){ alert('新时间与「'+h.name+'」冲突'); return; }
     }
+
+    // 更新锚定任务本身
+    ev.start=toTime(ns); ev.end=toTime(ne);
     await syncEventToCloud(ev);
+
+    // 找到所有在锚定任务之后、未完成的任务，依次顺延
+    const subsequent = events.filter(e =>
+      e.date === ev.date &&
+      e.id !== ev.id &&
+      !e.done &&
+      toMin(e.start) >= ns
+    ).sort((a,b)=>toMin(a.start)-toMin(b.start));
+
+    const gap = settings.task_gap || 0;
+    const dayEnd = toMin(settings.day_end);
+    let cursor = ne + gap;
+
+    for(const sub of subsequent){
+      const d = toMin(sub.end) - toMin(sub.start);
+      let ns2 = cursor;
+      let guard = 0;
+      while(guard++ < 100){
+        const conflict = hardItems.find(h => ns2 < h.end && (ns2 + d) > h.start);
+        if(!conflict) break;
+        ns2 = conflict.end;
+      }
+      const ne2 = ns2 + d;
+      if(ne2 > dayEnd) break;
+
+      // 只往前挪
+      const oldSubStart = toMin(sub.start);
+      if(ns2 <= oldSubStart){
+        cursor = Math.max(cursor, toMin(sub.end) + gap);
+        continue;
+      }
+      sub.start = toTime(ns2);
+      sub.end = toTime(ne2);
+      await syncEventToCloud(sub);
+      cursor = ne2 + gap;
+    }
+
     $('modalOverlay').classList.remove('show');
     renderCalendar();
     showToast('✅ 已延后到 '+ev.start+' 开始');
@@ -1529,7 +1607,7 @@ function drawHiker(ctx, x, y, paused){
 }
 
 function stopMountainAnimation(){
-  focusState.ended = true;
+  if(focusState) focusState.ended = true;
   if(focusAnimationId) cancelAnimationFrame(focusAnimationId);
   focusAnimationId = null;
 }
@@ -1597,8 +1675,8 @@ $('focusFinishBtn').onclick = async () => {
     const newEnd = oldEnd + diff;
     ev.end = toTime(newEnd);
     ev.duration = toMin(ev.end) - toMin(ev.start);
-    await shiftSubsequent(ev.date, ev.id, newEnd, diff);
     await syncEventToCloud(ev);
+    await shiftSubsequent(ev.date, ev.id, newEnd, diff);
     showToast('⏰ 检测到任务超时 '+diff+' 分钟，后续任务已顺延');
   } else if(diff < 0){
     showToast('🎉 恭喜提前 '+(-diff)+' 分钟完成任务！多的时间可以放松一下');
